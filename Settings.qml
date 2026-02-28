@@ -197,7 +197,8 @@ ColumnLayout {
         onToggled: {
             root.editDimMode = checked
             pluginApi?.mainInstance?.applyWithOverrides(
-                root.editAccentSource, root.editDimMode)
+                root.editAccentSource, root.editDimMode,
+                root.editIconTheme)
         }
         defaultValue: pluginApi?.manifest?.metadata?.defaultSettings?.dimMode ?? false
     }
