@@ -1,0 +1,26 @@
+{
+  "id": "noctalia-folders",
+  "name": "Noctalia Folders",
+  "version": "2.1.0",
+  "minNoctaliaVersion": "3.6.0",
+  "author": "Christopher",
+  "license": "MIT",
+  "repository": "",
+  "description": "Recolors folder icons to match your Noctalia accent color. Supports Papirus recoloring, Adwaita closest-match, and Adwaita recoloring with optional dim mode. Choose between primary, secondary, tertiary, or hover as the accent source.",
+  "tags": ["Utility", "Theming"],
+  "entryPoints": {
+    "main": "Main.qml",
+    "settings": "Settings.qml"
+  },
+  "dependencies": {
+    "plugins": []
+  },
+  "metadata": {
+    "defaultSettings": {
+      "autoApply": true,
+      "iconTheme": "papirus",
+      "dimMode": false,
+      "accentSource": "mPrimary"
+    }
+  }
+}

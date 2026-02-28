@@ -1,0 +1,740 @@
+#!/usr/bin/env bash
+# noctalia-folders - Recolor folder icons to match your Noctalia theme
+#
+# Supports three modes:
+#   papirus         - Recolor Papirus-Dark folder SVGs (default)
+#   adwaita-match   - Switch to closest built-in Adwaita-{color} theme
+#   adwaita-recolor - Recolor Adwaita folder SVGs with exact accent
+#
+# Usage:
+#   noctalia-folders --install                    Install icon theme
+#   noctalia-folders --apply                      Apply current accent
+#   noctalia-folders --apply <scheme>             Apply specific scheme
+#   noctalia-folders --apply --icon-theme papirus Apply with specific mode
+#   noctalia-folders --apply --dim                Apply with dimmed accent
+#   noctalia-folders --apply --color-source mSecondary  Use secondary color
+#   noctalia-folders --reset                      Revert to defaults
+#   noctalia-folders --status                     Show current state
+
+set -euo pipefail
+
+readonly PROGNAME="$(basename "$0")"
+readonly VERSION="2.1.0"
+
+# Paths
+readonly NOCTALIA_COLORS="$HOME/.config/noctalia/colors.json"
+readonly NOCTALIA_SETTINGS="$HOME/.config/noctalia/settings.json"
+readonly NOCTALIA_SCHEMES="$HOME/.config/noctalia/colorschemes"
+readonly ICONS_USER="$HOME/.local/share/icons"
+readonly CONFIG_DIR="$HOME/.config/noctalia-folders"
+readonly CONFIG_FILE="$CONFIG_DIR/state"
+
+# ──────────────────────────────────────────────
+# Icon theme profiles
+# ──────────────────────────────────────────────
+
+# Papirus profile
+readonly PAPIRUS_THEME_NAME="Papirus-Noctalia"
+readonly PAPIRUS_BASE_THEME="Papirus-Dark"
+readonly -a PAPIRUS_SOURCE_DIRS=(
+    "$HOME/.local/share/icons/Papirus-Dark"
+    "/usr/share/icons/Papirus-Dark"
+    "/usr/local/share/icons/Papirus-Dark"
+)
+readonly PAPIRUS_BASE_MAIN="#5294e2"
+readonly PAPIRUS_BASE_DARK="#4877b1"
+readonly PAPIRUS_BASE_ACCENT="#1d344f"
+readonly -a PAPIRUS_SIZES=(22x22 24x24 32x32 48x48 64x64)
+
+# Adwaita profile
+readonly ADWAITA_THEME_NAME="Adwaita-Noctalia"
+readonly ADWAITA_BASE_THEME="Adwaita"
+readonly -a ADWAITA_SOURCE_DIRS=(
+    "$HOME/.local/share/icons/Adwaita"
+    "/usr/share/icons/Adwaita"
+    "/usr/local/share/icons/Adwaita"
+)
+readonly ADWAITA_BASE_1="#438de6"
+readonly ADWAITA_BASE_2="#62a0ea"
+readonly ADWAITA_BASE_3="#a4caee"
+readonly ADWAITA_BASE_4="#afd4ff"
+readonly ADWAITA_BASE_5="#c0d5ea"
+
+# ──────────────────────────────────────────────
+# Unified Python helper — single invocation for all color work
+# ──────────────────────────────────────────────
+
+# Reads colors from JSON + derives shades in ONE python call
+# Output: line 1 = accent hex, line 2 = scheme name, then derived colors
+read_and_derive() {
+    local scheme_arg="$1"
+    local color_source="$2"
+    local mode="$3"
+    local dim="$4"
+    python3 << PYEOF
+import json, colorsys, math, sys, os
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+
+def rgb_to_hex(r, g, b):
+    return '#{:02x}{:02x}{:02x}'.format(
+        max(0, min(255, int(r * 255))),
+        max(0, min(255, int(g * 255))),
+        max(0, min(255, int(b * 255))))
+
+def dim_color(h, s, l):
+    return h, max(0.0, s * 0.70), max(0.0, l * 0.85)
+
+# Read accent color
+scheme_arg = "$scheme_arg"
+color_source = "$color_source"
+colors_file = os.path.expanduser("$NOCTALIA_COLORS")
+settings_file = os.path.expanduser("$NOCTALIA_SETTINGS")
+schemes_dir = os.path.expanduser("$NOCTALIA_SCHEMES")
+
+if scheme_arg:
+    scheme_name = scheme_arg
+    scheme_file = os.path.join(schemes_dir, scheme_name, scheme_name + ".json")
+    if not os.path.exists(scheme_file):
+        print(f"ERROR:Colorscheme '{scheme_name}' not found", file=sys.stderr)
+        sys.exit(1)
+    with open(scheme_file) as f:
+        data = json.load(f)
+    dark = data.get("dark", {})
+    primary = dark.get(color_source, dark.get("mPrimary", ""))
+else:
+    with open(settings_file) as f:
+        settings = json.load(f)
+    scheme_name = settings.get("colorSchemes", {}).get("predefinedScheme", "unknown")
+    with open(colors_file) as f:
+        colors = json.load(f)
+    primary = colors.get(color_source, colors.get("mPrimary", ""))
+
+if not primary:
+    print("ERROR:Could not read accent color", file=sys.stderr)
+    sys.exit(1)
+
+print(primary)
+print(scheme_name)
+
+mode = "$mode"
+dim = "$dim" == "true"
+
+r, g, b = hex_to_rgb(primary)
+h, l, s = colorsys.rgb_to_hls(r, g, b)
+
+if dim:
+    h, s, l = dim_color(h, s, l)
+
+if mode == "papirus":
+    # 3 shades: main, dark (30%), darkest (65%)
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, l, s)))
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.70), s)))
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.35), s)))
+
+elif mode == "adwaita-recolor":
+    # 5 shades: relative HSL offsets from Adwaita base blues
+    bases = ['#438de6', '#62a0ea', '#a4caee', '#afd4ff', '#c0d5ea']
+    base_hls = [colorsys.rgb_to_hls(*hex_to_rgb(b)) for b in bases]
+    ref_h, ref_l, ref_s = base_hls[0]
+    target_h, target_l, target_s = h, l, s
+    for bh, bl, bs in base_hls:
+        new_h = (target_h + (bh - ref_h)) % 1.0
+        new_s = min(1.0, max(0.0, target_s * (bs / ref_s))) if ref_s > 0 else target_s
+        new_l = min(1.0, max(0.0, target_l * (bl / ref_l))) if ref_l > 0 else target_l
+        print(rgb_to_hex(*colorsys.hls_to_rgb(new_h, new_l, new_s)))
+
+elif mode == "adwaita-match":
+    # Find closest built-in Adwaita theme
+    def dist(c1, c2):
+        return math.sqrt(sum((a - b) ** 2 for a, b in zip(c1, c2)))
+    target_rgb = tuple(int(x * 255) for x in colorsys.hls_to_rgb(h, l, s))
+    themes = {
+        "Adwaita": "#3584e4", "Adwaita-brown": "#986a44",
+        "Adwaita-green": "#3a944a", "Adwaita-orange": "#ed5b00",
+        "Adwaita-pink": "#d56199", "Adwaita-purple": "#954ab5",
+        "Adwaita-red": "#e62d42", "Adwaita-slate": "#6f8396",
+        "Adwaita-teal": "#2190a4", "Adwaita-yellow": "#c88800",
+    }
+    best = min(themes.items(), key=lambda kv: dist(target_rgb, tuple(int(x*255) for x in hex_to_rgb(kv[1]))))
+    print(best[0])
+
+PYEOF
+}
+
+# Derive colors for restore (just color math, no JSON reads)
+derive_restore_colors() {
+    local hex="$1" dim="$2" mode="$3"
+    python3 << PYEOF
+import colorsys
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+
+def rgb_to_hex(r, g, b):
+    return '#{:02x}{:02x}{:02x}'.format(
+        max(0, min(255, int(r * 255))),
+        max(0, min(255, int(g * 255))),
+        max(0, min(255, int(b * 255))))
+
+def dim_color(h, s, l):
+    return h, max(0.0, s * 0.70), max(0.0, l * 0.85)
+
+r, g, b = hex_to_rgb("$hex")
+h, l, s = colorsys.rgb_to_hls(r, g, b)
+if "$dim" == "true":
+    h, s, l = dim_color(h, s, l)
+
+mode = "$mode"
+if mode == "papirus":
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, l, s)))
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.70), s)))
+    print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.35), s)))
+elif mode == "adwaita-recolor":
+    bases = ['#438de6', '#62a0ea', '#a4caee', '#afd4ff', '#c0d5ea']
+    base_hls = [colorsys.rgb_to_hls(*hex_to_rgb(b)) for b in bases]
+    ref_h, ref_l, ref_s = base_hls[0]
+    for bh, bl, bs in base_hls:
+        new_h = (h + (bh - ref_h)) % 1.0
+        new_s = min(1.0, max(0.0, s * (bs / ref_s))) if ref_s > 0 else s
+        new_l = min(1.0, max(0.0, l * (bl / ref_l))) if ref_l > 0 else l
+        print(rgb_to_hex(*colorsys.hls_to_rgb(new_h, new_l, new_s)))
+PYEOF
+}
+
+# ──────────────────────────────────────────────
+# Utility functions
+# ──────────────────────────────────────────────
+
+msg() { printf "%s: %s\n" "$PROGNAME" "$*"; }
+err() { printf "%s: error: %s\n" "$PROGNAME" "$*" >&2; }
+fatal() { err "$*"; exit 1; }
+
+find_source_dir() {
+    local -n dirs_ref=$1
+    for dir in "${dirs_ref[@]}"; do
+        [ -d "$dir" ] && { printf '%s' "$dir"; return 0; }
+    done
+    return 1
+}
+
+save_state() {
+    local color="$1" scheme="${2:-unknown}" mode="${3:-$ICON_THEME}" dim_flag="${4:-$DIM_MODE}"
+    mkdir -p "$CONFIG_DIR"
+    printf 'color=%s\nscheme=%s\nmode=%s\ndim=%s\ntimestamp=%s\n' \
+        "$color" "$scheme" "$mode" "$dim_flag" "$(date -Iseconds)" > "$CONFIG_FILE"
+}
+
+load_state_mode() { grep '^mode=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || echo ""; }
+load_state_dim() { grep '^dim=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || echo "false"; }
+
+# ──────────────────────────────────────────────
+# Install: Papirus mode
+# ──────────────────────────────────────────────
+
+do_install_papirus() {
+    local source_dir
+    source_dir="$(find_source_dir PAPIRUS_SOURCE_DIRS)" || fatal "Cannot find Papirus-Dark. Install it first."
+    local theme_dir="$ICONS_USER/$PAPIRUS_THEME_NAME"
+
+    msg "Installing $PAPIRUS_THEME_NAME from $source_dir ..."
+    mkdir -p "$ICONS_USER"
+    [ -d "$theme_dir" ] && { msg "Removing existing ..."; rm -rf "$theme_dir"; }
+    mkdir -p "$theme_dir"
+
+    # Build Directories= line from sizes we'll actually populate
+    local dir_list=""
+    for size in "${PAPIRUS_SIZES[@]}"; do
+        [ -n "$dir_list" ] && dir_list+=","
+        dir_list+="${size}/places"
+    done
+
+    cat > "$theme_dir/index.theme" << INDEXEOF
+[Icon Theme]
+Name=Papirus-Noctalia
+Comment=Papirus-Dark with Noctalia accent-colored folders
+Inherits=Papirus-Dark,Papirus,breeze-dark,hicolor
+
+Example=folder
+FollowsColorScheme=true
+
+Directories=${dir_list}
+
+INDEXEOF
+
+    # Add a [size/places] section for each size
+    for size in "${PAPIRUS_SIZES[@]}"; do
+        local num="${size%%x*}"
+        cat >> "$theme_dir/index.theme" << SECTIONEOF
+[${size}/places]
+Context=Places
+Size=${num}
+Type=Fixed
+
+SECTIONEOF
+    done
+
+    local size
+    for size in "${PAPIRUS_SIZES[@]}"; do
+        local src_places
+        src_places="$(readlink -f "$source_dir/$size/places" 2>/dev/null)" || continue
+        [ -d "$src_places" ] || continue
+
+        local dest_places="$theme_dir/$size/places"
+        mkdir -p "$dest_places"
+        msg "  Copying $size/places ..."
+
+        find "$src_places" -maxdepth 1 \( -name 'folder-blue*' -o -name 'user-blue*' \) ! -type l \
+            -exec cp {} "$dest_places/" \;
+
+        for svg in "$dest_places"/folder-blue*.svg; do
+            [ -f "$svg" ] || continue
+            local base="${svg##*/}"
+            ln -sf "$base" "$dest_places/${base/-blue/}" 2>/dev/null || true
+        done
+        for svg in "$dest_places"/user-blue*.svg; do
+            [ -f "$svg" ] || continue
+            local base="${svg##*/}"
+            ln -sf "$base" "$dest_places/${base/-blue/}" 2>/dev/null || true
+        done
+    done
+
+    local total
+    total="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
+    msg "Installed $PAPIRUS_THEME_NAME ($total SVG files)"
+}
+
+# ──────────────────────────────────────────────
+# Install: Adwaita recolor mode
+# ──────────────────────────────────────────────
+
+do_install_adwaita() {
+    local source_dir
+    source_dir="$(find_source_dir ADWAITA_SOURCE_DIRS)" || fatal "Cannot find Adwaita. Install it first."
+    local theme_dir="$ICONS_USER/$ADWAITA_THEME_NAME"
+
+    msg "Installing $ADWAITA_THEME_NAME from $source_dir ..."
+    mkdir -p "$ICONS_USER"
+    [ -d "$theme_dir" ] && { msg "Removing existing ..."; rm -rf "$theme_dir"; }
+    mkdir -p "$theme_dir"
+
+    # Build Directories= line: scalable/places + any raster sizes that exist
+    local dir_list="scalable/places"
+    local raster_size
+    for raster_size in 16x16 22x22 24x24 32x32 48x48 64x64 96x96; do
+        [ -d "$source_dir/$raster_size/places" ] && dir_list+=",${raster_size}/places"
+    done
+
+    cat > "$theme_dir/index.theme" << INDEXEOF
+[Icon Theme]
+Name=Adwaita-Noctalia
+Comment=Adwaita with Noctalia accent-colored folders
+Inherits=Adwaita,AdwaitaLegacy,hicolor
+
+Example=folder
+FollowsColorScheme=true
+
+Directories=${dir_list}
+
+[scalable/places]
+Context=Places
+Size=64
+MinSize=16
+MaxSize=512
+Type=Scalable
+
+INDEXEOF
+
+    for raster_size in 16x16 22x22 24x24 32x32 48x48 64x64 96x96; do
+        [ -d "$source_dir/$raster_size/places" ] || continue
+        local num="${raster_size%%x*}"
+        cat >> "$theme_dir/index.theme" << SECTIONEOF
+[${raster_size}/places]
+Context=Places
+Size=${num}
+Type=Fixed
+
+SECTIONEOF
+    done
+
+    local src_places="$source_dir/scalable/places"
+    [ -d "$src_places" ] || fatal "Adwaita scalable/places not found"
+
+    local dest_places="$theme_dir/scalable/places"
+    mkdir -p "$dest_places"
+    msg "  Copying scalable/places ..."
+    find "$src_places" -maxdepth 1 \( -name 'folder*' -o -name 'user*' \) ! -type l \
+        -exec cp {} "$dest_places/" \;
+
+    local raster_size
+    for raster_size in 16x16 22x22 24x24 32x32 48x48 64x64 96x96; do
+        local src_raster="$source_dir/$raster_size/places"
+        [ -d "$src_raster" ] || continue
+        local dest_raster="$theme_dir/$raster_size/places"
+        mkdir -p "$dest_raster"
+        find "$src_raster" -maxdepth 1 \( -name 'folder*' -o -name 'user*' \) ! -type l \
+            -exec cp {} "$dest_raster/" \;
+    done
+
+    local total
+    total="$(find "$theme_dir" \( -name '*.svg' -o -name '*.png' \) ! -type l | wc -l)"
+    msg "Installed $ADWAITA_THEME_NAME ($total icon files)"
+}
+
+# ──────────────────────────────────────────────
+# Install dispatcher
+# ──────────────────────────────────────────────
+
+do_install() {
+    case "$ICON_THEME" in
+        papirus)         do_install_papirus ;;
+        adwaita-recolor) do_install_adwaita ;;
+        adwaita-match)   msg "Adwaita closest-match mode does not require installation." ;;
+        *)               fatal "Unknown icon theme mode: $ICON_THEME" ;;
+    esac
+}
+
+# ──────────────────────────────────────────────
+# Batch sed helpers (15x faster than per-file loops)
+# ──────────────────────────────────────────────
+
+batch_sed_papirus() {
+    local theme_dir="$1" old1="$2" old2="$3" old3="$4" new1="$5" new2="$6" new3="$7"
+    find "$theme_dir" -name '*.svg' ! -type l -exec \
+        sed -i -e "s/${old1}/${new1}/gi" -e "s/${old2}/${new2}/gi" -e "s/${old3}/${new3}/gi" {} +
+}
+
+batch_sed_adwaita() {
+    local theme_dir="$1" old1="$2" old2="$3" old3="$4" old4="$5" old5="$6" \
+          new1="$7" new2="$8" new3="$9" new4="${10}" new5="${11}"
+    find "$theme_dir" -name '*.svg' ! -type l -exec \
+        sed -i -e "s/${old1}/${new1}/gi" -e "s/${old2}/${new2}/gi" \
+               -e "s/${old3}/${new3}/gi" -e "s/${old4}/${new4}/gi" \
+               -e "s/${old5}/${new5}/gi" {} +
+}
+
+# ──────────────────────────────────────────────
+# Restore base colors (quiet, used internally)
+# ──────────────────────────────────────────────
+
+do_restore_papirus_quietly() {
+    [ -f "$CONFIG_FILE" ] || return 0
+    local prev_color prev_dim
+    prev_color="$(grep '^color=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)"
+    prev_dim="$(load_state_dim)"
+    [ -n "$prev_color" ] || return 0
+
+    local colors
+    colors="$(derive_restore_colors "$prev_color" "$prev_dim" "papirus")"
+    local old_main old_dark old_accent
+    old_main="$(echo "$colors" | sed -n '1p')"
+    old_dark="$(echo "$colors" | sed -n '2p')"
+    old_accent="$(echo "$colors" | sed -n '3p')"
+
+    batch_sed_papirus "$ICONS_USER/$PAPIRUS_THEME_NAME" \
+        "$old_main" "$old_dark" "$old_accent" \
+        "$PAPIRUS_BASE_MAIN" "$PAPIRUS_BASE_DARK" "$PAPIRUS_BASE_ACCENT"
+}
+
+do_restore_adwaita_quietly() {
+    [ -f "$CONFIG_FILE" ] || return 0
+    local prev_color prev_dim
+    prev_color="$(grep '^color=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)"
+    prev_dim="$(load_state_dim)"
+    [ -n "$prev_color" ] || return 0
+
+    local colors
+    colors="$(derive_restore_colors "$prev_color" "$prev_dim" "adwaita-recolor")"
+    local old_1 old_2 old_3 old_4 old_5
+    old_1="$(echo "$colors" | sed -n '1p')"
+    old_2="$(echo "$colors" | sed -n '2p')"
+    old_3="$(echo "$colors" | sed -n '3p')"
+    old_4="$(echo "$colors" | sed -n '4p')"
+    old_5="$(echo "$colors" | sed -n '5p')"
+
+    batch_sed_adwaita "$ICONS_USER/$ADWAITA_THEME_NAME" \
+        "$old_1" "$old_2" "$old_3" "$old_4" "$old_5" \
+        "$ADWAITA_BASE_1" "$ADWAITA_BASE_2" "$ADWAITA_BASE_3" "$ADWAITA_BASE_4" "$ADWAITA_BASE_5"
+}
+
+# ──────────────────────────────────────────────
+# Apply dispatcher
+# ──────────────────────────────────────────────
+
+do_apply() {
+    local scheme_arg="${1:-}"
+
+    # Single python call: read colors + derive shades
+    local result
+    result="$(read_and_derive "$scheme_arg" "$COLOR_SOURCE" "$ICON_THEME" "$DIM_MODE")" || \
+        fatal "Failed to read colors"
+
+    local primary scheme_name
+    primary="$(echo "$result" | sed -n '1p')"
+    scheme_name="$(echo "$result" | sed -n '2p')"
+
+    [ -n "$primary" ] || fatal "Could not read accent color. Is Noctalia configured?"
+
+    case "$ICON_THEME" in
+        papirus)
+            local theme_dir="$ICONS_USER/$PAPIRUS_THEME_NAME"
+            [ -d "$theme_dir" ] || { msg "Not found. Installing ..."; do_install_papirus; }
+
+            local new_main new_dark new_accent
+            new_main="$(echo "$result" | sed -n '3p')"
+            new_dark="$(echo "$result" | sed -n '4p')"
+            new_accent="$(echo "$result" | sed -n '5p')"
+
+            msg "Applying $primary from '$scheme_name' (papirus, source: $COLOR_SOURCE) ..."
+            msg "  Main: $new_main  Dark: $new_dark  Darkest: $new_accent"
+
+            do_restore_papirus_quietly
+            batch_sed_papirus "$theme_dir" \
+                "$PAPIRUS_BASE_MAIN" "$PAPIRUS_BASE_DARK" "$PAPIRUS_BASE_ACCENT" \
+                "$new_main" "$new_dark" "$new_accent"
+
+            local count
+            count="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
+            msg "Recolored $count SVG files."
+            save_state "$primary" "$scheme_name" "papirus" "$DIM_MODE"
+            apply_icon_theme "$PAPIRUS_THEME_NAME"
+            do_update_cache "$theme_dir"
+            ;;
+
+        adwaita-match)
+            local best_theme
+            best_theme="$(echo "$result" | sed -n '3p')"
+
+            msg "Applying $primary from '$scheme_name' (adwaita-match, source: $COLOR_SOURCE) ..."
+            msg "  Best match: $best_theme"
+
+            if [ ! -d "/usr/share/icons/$best_theme" ] && [ ! -d "$ICONS_USER/$best_theme" ]; then
+                msg "Warning: $best_theme not found, falling back to Adwaita"
+                best_theme="Adwaita"
+            fi
+
+            save_state "$primary" "$scheme_name" "adwaita-match" "$DIM_MODE"
+            apply_icon_theme "$best_theme"
+            ;;
+
+        adwaita-recolor)
+            local theme_dir="$ICONS_USER/$ADWAITA_THEME_NAME"
+            [ -d "$theme_dir" ] || { msg "Not found. Installing ..."; do_install_adwaita; }
+
+            local new_1 new_2 new_3 new_4 new_5
+            new_1="$(echo "$result" | sed -n '3p')"
+            new_2="$(echo "$result" | sed -n '4p')"
+            new_3="$(echo "$result" | sed -n '5p')"
+            new_4="$(echo "$result" | sed -n '6p')"
+            new_5="$(echo "$result" | sed -n '7p')"
+
+            msg "Applying $primary from '$scheme_name' (adwaita-recolor, source: $COLOR_SOURCE) ..."
+            msg "  Shades: $new_1 $new_2 $new_3 $new_4 $new_5"
+
+            do_restore_adwaita_quietly
+            batch_sed_adwaita "$theme_dir" \
+                "$ADWAITA_BASE_1" "$ADWAITA_BASE_2" "$ADWAITA_BASE_3" "$ADWAITA_BASE_4" "$ADWAITA_BASE_5" \
+                "$new_1" "$new_2" "$new_3" "$new_4" "$new_5"
+
+            local count
+            count="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
+            msg "Recolored $count SVG files."
+            save_state "$primary" "$scheme_name" "adwaita-recolor" "$DIM_MODE"
+            apply_icon_theme "$ADWAITA_THEME_NAME"
+            do_update_cache "$theme_dir"
+            ;;
+
+        *) fatal "Unknown icon theme mode: $ICON_THEME" ;;
+    esac
+
+    msg "Done! Folder icons now match '$scheme_name'."
+}
+
+# ──────────────────────────────────────────────
+# Reset / Status / Cache
+# ──────────────────────────────────────────────
+
+do_reset() {
+    local prev_mode
+    prev_mode="$(load_state_mode)"
+    prev_mode="${prev_mode:-$ICON_THEME}"
+
+    case "$prev_mode" in
+        papirus)
+            [ -d "$ICONS_USER/$PAPIRUS_THEME_NAME" ] || fatal "$PAPIRUS_THEME_NAME is not installed."
+            msg "Resetting Papirus to default blue ..."
+            do_restore_papirus_quietly
+            do_update_cache "$ICONS_USER/$PAPIRUS_THEME_NAME"
+            ;;
+        adwaita-recolor)
+            [ -d "$ICONS_USER/$ADWAITA_THEME_NAME" ] || fatal "$ADWAITA_THEME_NAME is not installed."
+            msg "Resetting Adwaita to default blue ..."
+            do_restore_adwaita_quietly
+            do_update_cache "$ICONS_USER/$ADWAITA_THEME_NAME"
+            ;;
+        adwaita-match)
+            msg "Resetting to base Adwaita ..."
+            ;;
+        *) msg "No previous mode, resetting ..." ;;
+    esac
+
+    rm -f "$CONFIG_FILE"
+    revert_icon_theme "$prev_mode"
+    msg "Reset complete."
+}
+
+do_status() {
+    msg "Icon theme mode: $ICON_THEME"
+    msg "Color source: $COLOR_SOURCE"
+    msg "Dim mode: $DIM_MODE"
+
+    local papirus_dir="$ICONS_USER/$PAPIRUS_THEME_NAME"
+    if [ -d "$papirus_dir" ]; then
+        msg "Papirus-Noctalia: installed ($(find "$papirus_dir" -name '*.svg' ! -type l | wc -l) SVGs)"
+    else
+        msg "Papirus-Noctalia: NOT installed"
+    fi
+
+    local adwaita_dir="$ICONS_USER/$ADWAITA_THEME_NAME"
+    if [ -d "$adwaita_dir" ]; then
+        msg "Adwaita-Noctalia: installed ($(find "$adwaita_dir" \( -name '*.svg' -o -name '*.png' \) ! -type l | wc -l) files)"
+    else
+        msg "Adwaita-Noctalia: NOT installed"
+    fi
+
+    if [ -f "$CONFIG_FILE" ]; then
+        msg "  Last color: $(grep '^color=' "$CONFIG_FILE" | cut -d= -f2)"
+        msg "  Scheme:     $(grep '^scheme=' "$CONFIG_FILE" | cut -d= -f2)"
+        msg "  Mode:       $(load_state_mode)"
+        msg "  Dim:        $(load_state_dim)"
+        msg "  Applied:    $(grep '^timestamp=' "$CONFIG_FILE" | cut -d= -f2)"
+    else
+        msg "  No customization applied yet."
+    fi
+
+    # Show all available color sources
+    python3 -c "
+import json
+with open('$NOCTALIA_COLORS') as f:
+    data = json.load(f)
+for key in ['mPrimary', 'mSecondary', 'mTertiary', 'mHover']:
+    val = data.get(key, 'N/A')
+    print(f'  {key}: {val}')
+"
+}
+
+do_update_cache() {
+    local theme_dir="${1:-}"
+    [ -n "$theme_dir" ] || return 0
+    command -v gtk-update-icon-cache &>/dev/null && \
+        gtk-update-icon-cache -qf "$theme_dir" 2>/dev/null || true
+}
+
+apply_icon_theme() {
+    local theme="$1"
+    command -v gsettings &>/dev/null && \
+        gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null && \
+        msg "Set GNOME/GTK → $theme" || true
+
+    local gtk3_ini="$HOME/.config/gtk-3.0/settings.ini"
+    [ -f "$gtk3_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk3_ini" 2>/dev/null || true
+
+    local gtk4_ini="$HOME/.config/gtk-4.0/settings.ini"
+    [ -f "$gtk4_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk4_ini" 2>/dev/null || true
+
+    local kdeglobals="$HOME/.config/kdeglobals"
+    if [ -f "$kdeglobals" ]; then
+        if grep -q '^\[Icons\]' "$kdeglobals"; then
+            sed -i "/^\[Icons\]/,/^\[/{s/^Theme=.*/Theme=$theme/}" "$kdeglobals"
+        else
+            printf '\n[Icons]\nTheme=%s\n' "$theme" >> "$kdeglobals"
+        fi
+    fi
+}
+
+revert_icon_theme() {
+    local mode="${1:-papirus}"
+    case "$mode" in
+        papirus)         apply_icon_theme "Papirus-Dark" ;;
+        adwaita-match|adwaita-recolor) apply_icon_theme "Adwaita" ;;
+        *)               apply_icon_theme "Papirus-Dark" ;;
+    esac
+}
+
+usage() {
+    cat << EOF
+$PROGNAME $VERSION - Recolor folder icons to match Noctalia themes
+
+USAGE
+  $PROGNAME --install                         Install recolored icon theme
+  $PROGNAME --apply                           Apply current accent color
+  $PROGNAME --apply <scheme>                  Apply specific colorscheme
+  $PROGNAME --reset                           Revert to default icons
+  $PROGNAME --status                          Show current state
+  $PROGNAME --version                         Print version
+  $PROGNAME --help                            Show this help
+
+OPTIONS
+  --icon-theme <mode>      papirus | adwaita-match | adwaita-recolor
+  --color-source <prop>    mPrimary | mSecondary | mTertiary | mHover
+  --dim                    Desaturate 30% + darken 15%
+
+EXAMPLES
+  $PROGNAME --install && $PROGNAME --apply
+  $PROGNAME --apply --color-source mSecondary
+  $PROGNAME --apply --icon-theme adwaita-match
+  $PROGNAME --apply --icon-theme adwaita-recolor --dim
+  $PROGNAME --reset
+EOF
+    exit "${1:-0}"
+}
+
+# ──────────────────────────────────────────────
+# Main
+# ──────────────────────────────────────────────
+
+ICON_THEME="papirus"
+DIM_MODE="false"
+COLOR_SOURCE="mPrimary"
+
+main() {
+    local operation="" scheme_arg=""
+    [ $# -gt 0 ] || usage 2
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --install)   operation="install" ;;
+            --apply)
+                operation="apply"
+                if [ -n "${2:-}" ] && [[ ! "$2" == --* ]]; then
+                    scheme_arg="$2"; shift
+                fi ;;
+            --reset)     operation="reset" ;;
+            --status)    operation="status" ;;
+            --icon-theme)
+                [ -n "${2:-}" ] || fatal "--icon-theme requires an argument"
+                ICON_THEME="$2"; shift ;;
+            --color-source)
+                [ -n "${2:-}" ] || fatal "--color-source requires an argument"
+                COLOR_SOURCE="$2"; shift ;;
+            --dim)       DIM_MODE="true" ;;
+            --version)   printf "%s %s\n" "$PROGNAME" "$VERSION"; exit 0 ;;
+            --help|-h)   usage 0 ;;
+            *)           err "unknown option: $1"; usage 2 ;;
+        esac
+        shift
+    done
+
+    case "$operation" in
+        install) do_install ;;
+        apply)   do_apply "$scheme_arg" ;;
+        reset)   do_reset ;;
+        status)  do_status ;;
+        *)       usage 2 ;;
+    esac
+}
+
+main "$@"
