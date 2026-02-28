@@ -49,10 +49,11 @@ Item {
 
     // Build and run a one-shot apply with explicit parameters
     // (used by Settings.qml for instant preview before framework save)
-    function applyWithOverrides(overrideAccentSource, overrideDimMode) {
+    function applyWithOverrides(overrideAccentSource, overrideDimMode, overrideIconTheme) {
         if (root.isRunning) return
         root.isRunning = true
-        let cmd = `"${root.scriptPath}" --apply --icon-theme ${root.iconTheme} --color-source ${overrideAccentSource}`
+        const theme = overrideIconTheme || root.iconTheme
+        let cmd = `"${root.scriptPath}" --apply --icon-theme ${theme} --color-source ${overrideAccentSource}`
         if (overrideDimMode) cmd += " --dim"
         applyProcess.command = ["sh", "-c", cmd]
         applyProcess.running = true

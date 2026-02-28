@@ -47,7 +47,8 @@ ColumnLayout {
         const b = parseInt(hexColor.substring(5, 7), 16) / 255
         const max = Math.max(r, g, b)
         const min = Math.min(r, g, b)
-        let h, s, l = (max + min) / 2
+        let l = (max + min) / 2
+        let h, s
         if (max === min) {
             h = s = 0
         } else {
@@ -126,7 +127,8 @@ ColumnLayout {
                         onClicked: {
                             root.editAccentSource = modelData.key
                             pluginApi?.mainInstance?.applyWithOverrides(
-                                root.editAccentSource, root.editDimMode)
+                                root.editAccentSource, root.editDimMode,
+                                root.editIconTheme)
                         }
                     }
                 }
@@ -231,13 +233,13 @@ ColumnLayout {
             if (mi.papirusSourceAvailable) {
                 lines.push("Papirus: " + (mi.papirusInstalled ? "Installed" : "Not installed"))
             } else {
-                lines.push("Papirus: Source not available")
+                lines.push("Papirus: Source not available (install Papirus-Dark)")
             }
 
             if (mi.adwaitaSourceAvailable) {
                 lines.push("Adwaita: " + (mi.adwaitaInstalled ? "Installed" : "Not installed"))
             } else {
-                lines.push("Adwaita: Source not available")
+                lines.push("Adwaita: Source not available (install Adwaita)")
             }
 
             const lastApplied = mi.lastAppliedColor || "none"
