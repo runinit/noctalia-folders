@@ -10,8 +10,12 @@ Item {
     property var pluginApi: null
 
     // Track state
-    property string lastAppliedColor: ""
+    property string lastAppliedFingerprint: ""
     property bool isRunning: false
+
+    function _currentFingerprint() {
+        return `${root.currentAccentColor}|${root.dimMode}|${root.iconTheme}`
+    }
 
     // Install detection
     property bool papirusInstalled: false
@@ -47,18 +51,6 @@ Item {
         return cmd
     }
 
-    // Build and run a one-shot apply with explicit parameters
-    // (used by Settings.qml for instant preview before framework save)
-    function applyWithOverrides(overrideAccentSource, overrideDimMode, overrideIconTheme) {
-        if (root.isRunning) return
-        root.isRunning = true
-        const theme = overrideIconTheme || root.iconTheme
-        let cmd = `"${root.scriptPath}" --apply --icon-theme ${theme} --color-source ${overrideAccentSource}`
-        if (overrideDimMode) cmd += " --dim"
-        applyProcess.command = ["sh", "-c", cmd]
-        applyProcess.running = true
-    }
-
     // ──────────────────────────────────────────────
     // Auto-apply on color change
     // ──────────────────────────────────────────────
@@ -82,38 +74,24 @@ Item {
         }
     }
 
+    function _autoApplyIfChanged(reason) {
+        if (root.autoApply && !root.isRunning && root._currentFingerprint() !== root.lastAppliedFingerprint) {
+            Logger.i("NoctaliaFolders", reason)
+            root.applyFolders()
+        }
+    }
+
     function _onAccentChanged() {
-        if (root.autoApply && !root.isRunning) {
-            Logger.i("NoctaliaFolders", `Accent (${root.accentSource}) changed to ${root.currentAccentColor}, auto-applying...`)
-            root.applyFolders()
-        }
+        root._autoApplyIfChanged(`Accent (${root.accentSource}) changed to ${root.currentAccentColor}, auto-applying...`)
     }
 
-    // Also re-apply when the user switches accent source
-    onAccentSourceChanged: {
-        if (root.autoApply && !root.isRunning && root.currentAccentColor) {
-            Logger.i("NoctaliaFolders", `Accent source changed to ${root.accentSource} (${root.currentAccentColor}), re-applying...`)
-            root.applyFolders()
-        }
-    }
-
-    onDimModeChanged: {
-        if (root.autoApply && !root.isRunning && root.currentAccentColor) {
-            Logger.i("NoctaliaFolders", `Dim mode changed to ${root.dimMode}, re-applying...`)
-            root.applyFolders()
-        }
-    }
-
-    onIconThemeChanged: {
-        if (root.autoApply && !root.isRunning && root.currentAccentColor) {
-            Logger.i("NoctaliaFolders", `Icon theme changed to ${root.iconTheme}, re-applying...`)
-            root.applyFolders()
-        }
-    }
+    // Settings-change handlers removed — only the Color singleton
+    // watcher (above) and the explicit Apply button trigger recoloring.
 
     Component.onCompleted: {
-        startupTimer.running = true
         root.checkInstallStatus()
+        stateCheckProcess.running = true
+        startupTimer.running = true
     }
 
     Timer {
@@ -122,10 +100,39 @@ Item {
         running: false
         repeat: false
         onTriggered: {
-            if (root.autoApply) {
-                root.applyFolders()
+            root._autoApplyIfChanged("Startup timer triggered, applying...")
+        }
+    }
+
+    Process {
+        id: stateCheckProcess
+        command: ["sh", "-c", `cat "$HOME/.config/noctalia-folders/state" 2>/dev/null || echo ""`]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = text.trim().split("\n")
+                let color = ""
+                let mode = ""
+                let dim = ""
+                for (const line of lines) {
+                    const eqIdx = line.indexOf("=")
+                    if (eqIdx < 0) continue
+                    const key = line.substring(0, eqIdx)
+                    const val = line.substring(eqIdx + 1)
+                    if (key === "color") color = val
+                    if (key === "mode") mode = val
+                    if (key === "dim") dim = val
+                }
+                if (color && mode && dim) {
+                    const stateFp = `${color}|${dim === "true"}|${mode}`
+                    const currentFp = root._currentFingerprint()
+                    if (stateFp === currentFp) {
+                        Logger.i("NoctaliaFolders", "State file matches current settings, skipping startup apply")
+                        root.lastAppliedFingerprint = currentFp
+                    }
+                }
             }
         }
+        stderr: StdioCollector {}
     }
 
     // ──────────────────────────────────────────────
@@ -205,7 +212,7 @@ Item {
         onExited: function(exitCode) {
             root.isRunning = false
             if (exitCode === 0) {
-                root.lastAppliedColor = root.currentAccentColor
+                root.lastAppliedFingerprint = root._currentFingerprint()
                 Logger.i("NoctaliaFolders", "Folders recolored successfully")
                 ToastService.showNotice("Noctalia Folders", "Folder icons recolored!", "folder")
             } else {
@@ -225,7 +232,7 @@ Item {
         stderr: StdioCollector {}
         onExited: function(exitCode) {
             root.isRunning = false
-            root.lastAppliedColor = ""
+            root.lastAppliedFingerprint = ""
             if (exitCode === 0) {
                 Logger.i("NoctaliaFolders", "Folders reset to defaults")
                 ToastService.showNotice("Noctalia Folders", "Folder icons reset to defaults", "folder")

@@ -256,7 +256,7 @@ do_install_papirus() {
 [Icon Theme]
 Name=Papirus-Noctalia
 Comment=Papirus-Dark with Noctalia accent-colored folders
-Inherits=Papirus-Dark,Papirus,breeze-dark,hicolor
+Inherits=Papirus-Dark,MoreWaita,Adwaita,AdwaitaLegacy,breeze-dark,hicolor
 
 Example=folder
 FollowsColorScheme=true
@@ -332,7 +332,7 @@ do_install_adwaita() {
 [Icon Theme]
 Name=Adwaita-Noctalia
 Comment=Adwaita with Noctalia accent-colored folders
-Inherits=Adwaita,AdwaitaLegacy,hicolor
+Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor
 
 Example=folder
 FollowsColorScheme=true
@@ -652,6 +652,20 @@ apply_icon_theme() {
         else
             printf '\n[Icons]\nTheme=%s\n' "$theme" >> "$kdeglobals"
         fi
+    fi
+
+    # qt5ct
+    local qt5ct_conf="$HOME/.config/qt5ct/qt5ct.conf"
+    if [ -f "$qt5ct_conf" ] && grep -q '^\[Appearance\]' "$qt5ct_conf"; then
+        sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt5ct_conf"
+        msg "Set qt5ct → $theme"
+    fi
+
+    # qt6ct
+    local qt6ct_conf="$HOME/.config/qt6ct/qt6ct.conf"
+    if [ -f "$qt6ct_conf" ] && grep -q '^\[Appearance\]' "$qt6ct_conf"; then
+        sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt6ct_conf"
+        msg "Set qt6ct → $theme"
     fi
 }
 

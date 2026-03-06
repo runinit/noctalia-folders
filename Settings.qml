@@ -1,14 +1,20 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Widgets
+import qs.Services.UI
 
 ColumnLayout {
     id: root
-    spacing: Style.marginL
+    spacing: Style.marginM
 
     property var pluginApi: null
+
+    // ──────────────────────────────────────────────
+    // Edit properties (local state, saved only on Apply)
+    // ──────────────────────────────────────────────
 
     property bool editAutoApply:
         pluginApi?.pluginSettings?.autoApply ??
@@ -30,237 +36,282 @@ ColumnLayout {
         pluginApi?.manifest?.metadata?.defaultSettings?.accentSource ||
         "mPrimary"
 
-    function colorForKey(key) {
-        switch (key) {
-        case "mPrimary":   return Color.mPrimary || "#888888"
-        case "mSecondary": return Color.mSecondary || "#888888"
-        case "mTertiary":  return Color.mTertiary || "#888888"
-        case "mHover":     return Color.mHover || "#888888"
-        default:           return "#888888"
-        }
-    }
+    // Derived from editIconTheme
+    readonly property string editBaseTheme: editIconTheme.startsWith("adwaita") ? "adwaita" : "papirus"
+    readonly property string editMethod: editIconTheme === "adwaita-match" ? "match" : "recolor"
 
-    function dimColor(hexColor) {
-        if (!hexColor || hexColor === "#888888") return hexColor
-        const r = parseInt(hexColor.substring(1, 3), 16) / 255
-        const g = parseInt(hexColor.substring(3, 5), 16) / 255
-        const b = parseInt(hexColor.substring(5, 7), 16) / 255
-        const max = Math.max(r, g, b)
-        const min = Math.min(r, g, b)
-        let l = (max + min) / 2
-        let h, s
-        if (max === min) {
-            h = s = 0
-        } else {
-            const d = max - min
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-            switch (max) {
-            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break
-            case g: h = ((b - r) / d + 2) / 6; break
-            case b: h = ((r - g) / d + 4) / 6; break
-            }
-        }
-        s *= 0.70
-        l *= 0.85
-        function hue2rgb(p, q, t) {
-            if (t < 0) t += 1
-            if (t > 1) t -= 1
-            if (t < 1/6) return p + (q - p) * 6 * t
-            if (t < 1/2) return q
-            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
-            return p
-        }
-        let r2, g2, b2
-        if (s === 0) {
-            r2 = g2 = b2 = l
-        } else {
-            const q = l < 0.5 ? l * (1 + s) : l + s - l * s
-            const p = 2 * l - q
-            r2 = hue2rgb(p, q, h + 1/3)
-            g2 = hue2rgb(p, q, h)
-            b2 = hue2rgb(p, q, h - 1/3)
-        }
-        const toHex = v => {
-            const hex = Math.round(v * 255).toString(16)
-            return hex.length === 1 ? "0" + hex : hex
-        }
-        return "#" + toHex(r2) + toHex(g2) + toHex(b2)
-    }
-
-    function displayColor(key) {
-        const base = colorForKey(key)
-        return root.editDimMode ? dimColor(base) : base
+    function computeIconTheme(baseTheme, method) {
+        if (baseTheme === "papirus") return "papirus"
+        if (method === "match") return "adwaita-match"
+        return "adwaita-recolor"
     }
 
     // ──────────────────────────────────────────────
-    // Accent color source selector (swatches with labels)
+    // Appearance
     // ──────────────────────────────────────────────
 
-    RowLayout {
+    NBox {
         Layout.fillWidth: true
-        spacing: Style.marginM
+        Layout.preferredHeight: appearanceContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
 
-        Repeater {
-            model: [
-                { key: "mPrimary",   label: "Primary" },
-                { key: "mSecondary", label: "Secondary" },
-                { key: "mTertiary",  label: "Tertiary" },
-                { key: "mHover",     label: "Hover" }
-            ]
+        ColumnLayout {
+            id: appearanceContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
 
-            delegate: ColumnLayout {
-                spacing: 4
+            NText {
+                text: "Appearance"
+                pointSize: Style.fontSizeL
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+            }
 
-                Rectangle {
-                    width: 36
-                    height: 36
-                    radius: width / 2
-                    color: root.displayColor(modelData.key)
-                    border.width: root.editAccentSource === modelData.key ? 3 : 1
-                    border.color: root.editAccentSource === modelData.key
-                        ? Color.mOnSurface || "#ffffff"
-                        : Color.mOutline || "#555555"
+            NColorChoice {
+                label: "Accent source"
+                description: "Which theme color to use for folder icons"
+                currentKey: root.editAccentSource
+                onSelected: key => {
+                    root.editAccentSource = key
+                }
+            }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.editAccentSource = modelData.key
-                            pluginApi?.mainInstance?.applyWithOverrides(
-                                root.editAccentSource, root.editDimMode,
-                                root.editIconTheme)
-                        }
+            NComboBox {
+                label: "Icon theme"
+                description: "Base icon theme to recolor"
+                model: [
+                    { "key": "papirus", "name": "Papirus" },
+                    { "key": "adwaita", "name": "Adwaita" }
+                ]
+                currentKey: root.editBaseTheme
+                onSelected: key => {
+                    root.editIconTheme = root.computeIconTheme(key, root.editMethod)
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: methodCombo.implicitHeight
+                enabled: root.editBaseTheme === "adwaita"
+                opacity: enabled ? 1.0 : 0.5
+
+                NComboBox {
+                    id: methodCombo
+                    anchors.fill: parent
+                    label: "Method"
+                    description: "Recolor copies SVGs; Closest Match uses a built-in Adwaita variant"
+                    model: [
+                        { "key": "recolor", "name": "Recolor" },
+                        { "key": "match",   "name": "Closest Match" }
+                    ]
+                    currentKey: root.editMethod
+                    onSelected: key => {
+                        root.editIconTheme = root.computeIconTheme(root.editBaseTheme, key)
                     }
                 }
+            }
 
-                Text {
-                    text: modelData.label
-                    color: root.editAccentSource === modelData.key
-                        ? Color.mOnSurface || "#ffffff"
-                        : Color.mOutline || "#888888"
-                    font.pixelSize: 11
-                    font.bold: root.editAccentSource === modelData.key
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.alignment: Qt.AlignHCenter
+            NToggle {
+                label: "Dim mode"
+                description: "Desaturate and darken the accent color for a muted folder look"
+                checked: root.editDimMode
+                onToggled: {
+                    root.editDimMode = checked
                 }
             }
         }
     }
 
-    NDivider {
+    // ──────────────────────────────────────────────
+    // Icon Theme Status
+    // ──────────────────────────────────────────────
+
+    NBox {
         Layout.fillWidth: true
-    }
+        Layout.preferredHeight: statusContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
 
-    // ──────────────────────────────────────────────
-    // Icon theme mode selector
-    // ──────────────────────────────────────────────
+        ColumnLayout {
+            id: statusContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
 
-    NComboBox {
-        label: "Icon theme mode"
-        description: "Choose how folder icons are themed"
-        model: {
-            const mi = pluginApi?.mainInstance
-            const pOk = mi?.papirusInstalled ?? false
-            const aOk = mi?.adwaitaInstalled ?? false
-            return [
-                {
-                    "key": "papirus",
-                    "name": pOk ? "Papirus (Recolored)" : "Papirus (Not installed)"
-                },
-                {
-                    "key": "adwaita-match",
-                    "name": aOk ? "Adwaita (Closest Match)" : "Adwaita (Not installed)"
-                },
-                {
-                    "key": "adwaita-recolor",
-                    "name": aOk ? "Adwaita (Recolored)" : "Adwaita (Not installed)"
+            NText {
+                text: "Icon Theme Status"
+                pointSize: Style.fontSizeL
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+            }
+
+            // Papirus-Noctalia row
+            RowLayout {
+                spacing: Style.marginS
+
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        return mi.papirusInstalled ? "#4caf50" : "#f44336"
+                    }
+                    Layout.alignment: Qt.AlignVCenter
                 }
-            ]
-        }
-        currentKey: root.editIconTheme
-        onSelected: key => root.editIconTheme = key
-        defaultValue: pluginApi?.manifest?.metadata?.defaultSettings?.iconTheme || "papirus"
-    }
 
-    NDivider {
-        Layout.fillWidth: true
-    }
+                NText {
+                    text: "Papirus-Noctalia"
+                    color: Color.mOnSurface
+                    pointSize: Style.fontSizeM
+                }
 
-    // ──────────────────────────────────────────────
-    // Dim mode toggle
-    // ──────────────────────────────────────────────
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        return mi.papirusInstalled ? "Installed" : "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant
+                    pointSize: Style.fontSizeS
+                }
 
-    NToggle {
-        label: "Dim mode"
-        description: "Desaturate and darken the accent color for a muted folder look"
-        checked: root.editDimMode
-        onToggled: {
-            root.editDimMode = checked
-            pluginApi?.mainInstance?.applyWithOverrides(
-                root.editAccentSource, root.editDimMode,
-                root.editIconTheme)
-        }
-        defaultValue: pluginApi?.manifest?.metadata?.defaultSettings?.dimMode ?? false
-    }
+                Item { Layout.fillWidth: true }
 
-    // ──────────────────────────────────────────────
-    // Auto-apply toggle
-    // ──────────────────────────────────────────────
-
-    NToggle {
-        label: "Auto-apply on theme change"
-        description: "Automatically recolor folder icons when the Noctalia colorscheme changes"
-        checked: root.editAutoApply
-        onToggled: root.editAutoApply = checked
-        defaultValue: pluginApi?.manifest?.metadata?.defaultSettings?.autoApply ?? true
-    }
-
-    NDivider {
-        Layout.fillWidth: true
-    }
-
-    // ──────────────────────────────────────────────
-    // Status info
-    // ──────────────────────────────────────────────
-
-    NLabel {
-        label: "Status"
-        description: {
-            const mi = pluginApi?.mainInstance
-            if (!mi?.installCheckDone) return "Checking installation..."
-
-            let lines = []
-
-            if (mi.papirusSourceAvailable) {
-                lines.push("Papirus: " + (mi.papirusInstalled ? "Installed" : "Not installed"))
-            } else {
-                lines.push("Papirus: Source not available (install Papirus-Dark)")
+                NButton {
+                    text: "Install"
+                    visible: {
+                        const mi = pluginApi?.mainInstance
+                        return mi?.installCheckDone && !mi.papirusInstalled
+                    }
+                    onClicked: root.launchInstall("papirus")
+                }
             }
 
-            if (mi.adwaitaSourceAvailable) {
-                lines.push("Adwaita: " + (mi.adwaitaInstalled ? "Installed" : "Not installed"))
-            } else {
-                lines.push("Adwaita: Source not available (install Adwaita)")
+            // Adwaita-Noctalia row
+            RowLayout {
+                spacing: Style.marginS
+
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        return mi.adwaitaInstalled ? "#4caf50" : "#f44336"
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                NText {
+                    text: "Adwaita-Noctalia"
+                    color: Color.mOnSurface
+                    pointSize: Style.fontSizeM
+                }
+
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        return mi.adwaitaInstalled ? "Installed" : "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant
+                    pointSize: Style.fontSizeS
+                }
+
+                Item { Layout.fillWidth: true }
+
+                NButton {
+                    text: "Install"
+                    visible: {
+                        const mi = pluginApi?.mainInstance
+                        return mi?.installCheckDone && !mi.adwaitaInstalled
+                    }
+                    onClicked: root.launchInstall("adwaita-recolor")
+                }
             }
 
-            const lastApplied = mi.lastAppliedColor || "none"
-            lines.push("Last applied: " + lastApplied)
-
-            if (mi.isRunning) lines.push("Recoloring...")
-
-            return lines.join("\n")
+            NText {
+                text: "Closest Match mode does not require installation."
+                color: Color.mOnSurfaceVariant
+                pointSize: Style.fontSizeS
+                wrapMode: Text.WordWrap
+            }
         }
     }
 
-    NDivider {
+    // ──────────────────────────────────────────────
+    // Behavior
+    // ──────────────────────────────────────────────
+
+    NBox {
         Layout.fillWidth: true
+        Layout.preferredHeight: behaviorContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
+
+        ColumnLayout {
+            id: behaviorContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
+
+            NText {
+                text: "Behavior"
+                pointSize: Style.fontSizeL
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+            }
+
+            NToggle {
+                label: "Auto-apply on theme change"
+                description: "Automatically recolor folder icons when the Noctalia colorscheme changes"
+                checked: root.editAutoApply
+                onToggled: {
+                    root.editAutoApply = checked
+                }
+            }
+        }
     }
 
     // ──────────────────────────────────────────────
-    // Manual actions
+    // Advanced
+    // ──────────────────────────────────────────────
+
+    NBox {
+        Layout.fillWidth: true
+        Layout.preferredHeight: advancedContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
+
+        ColumnLayout {
+            id: advancedContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
+
+            NText {
+                text: "Advanced"
+                pointSize: Style.fontSizeL
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+            }
+
+            NButton {
+                text: "Rebuild Icon Cache"
+                onClicked: {
+                    rebuildCacheProcess.running = true
+                }
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    // Bottom action buttons
     // ──────────────────────────────────────────────
 
     RowLayout {
+        Layout.fillWidth: true
         spacing: Style.marginM
 
         NButton {
@@ -270,10 +321,13 @@ ColumnLayout {
             }
         }
 
+        Item { Layout.fillWidth: true }
+
         NButton {
-            text: "Install Theme"
+            text: "Apply"
             onClicked: {
-                pluginApi?.mainInstance?.installTheme()
+                root.saveSettings()
+                pluginApi?.mainInstance?.applyFolders()
             }
         }
     }
@@ -283,8 +337,40 @@ ColumnLayout {
     }
 
     // ──────────────────────────────────────────────
-    // Save
+    // Processes
     // ──────────────────────────────────────────────
+
+    Process {
+        id: installTerminal
+        onExited: function(exitCode) {
+            pluginApi?.mainInstance?.checkInstallStatus()
+        }
+    }
+
+    Process {
+        id: rebuildCacheProcess
+        command: ["sh", "-c", [
+            'gtk-update-icon-cache -qf "$HOME/.local/share/icons/Papirus-Noctalia" 2>/dev/null',
+            'gtk-update-icon-cache -qf "$HOME/.local/share/icons/Adwaita-Noctalia" 2>/dev/null',
+            'true'
+        ].join("; ")]
+        onExited: function(exitCode) {
+            ToastService.showNotice("Noctalia Folders", "Icon cache rebuilt", "folder")
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    // Functions
+    // ──────────────────────────────────────────────
+
+    function launchInstall(iconTheme) {
+        const mi = pluginApi?.mainInstance
+        if (!mi) return
+        const script = mi.scriptPath
+        const cmd = `"${script}" --install --icon-theme ${iconTheme}`
+        installTerminal.command = ["sh", "-c", `$TERMINAL -e sh -c '${cmd}; echo; echo "Press Enter to close..."; read _'`]
+        installTerminal.running = true
+    }
 
     function saveSettings() {
         if (!pluginApi) {
