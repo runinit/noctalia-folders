@@ -635,9 +635,21 @@ do_update_cache() {
 
 apply_icon_theme() {
     local theme="$1"
-    command -v gsettings &>/dev/null && \
-        gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null && \
-        msg "Set GNOME/GTK → $theme" || true
+
+    # Determine base theme for refresh toggle
+    local base_theme="hicolor"
+    case "$ICON_THEME" in
+        papirus*)        base_theme="$PAPIRUS_BASE_THEME" ;;
+        adwaita*)        base_theme="$ADWAITA_BASE_THEME" ;;
+    esac
+
+    # Force GTK to re-read icons by toggling theme away and back
+    if command -v gsettings &>/dev/null; then
+        gsettings set org.gnome.desktop.interface icon-theme "$base_theme" 2>/dev/null
+        sleep 0.2
+        gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null
+        msg "Set GNOME/GTK -> $theme (refreshed)"
+    fi
 
     local gtk3_ini="$HOME/.config/gtk-3.0/settings.ini"
     [ -f "$gtk3_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk3_ini" 2>/dev/null || true

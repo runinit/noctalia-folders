@@ -90,6 +90,25 @@ ColumnLayout {
                 }
             }
 
+            NText {
+                visible: {
+                    const mi = pluginApi?.mainInstance
+                    if (!mi?.installCheckDone) return false
+                    if (root.editBaseTheme === "papirus" && !mi.papirusSourceAvailable) return true
+                    if (root.editBaseTheme === "adwaita" && !mi.adwaitaSourceAvailable) return true
+                    return false
+                }
+                text: {
+                    if (root.editBaseTheme === "papirus")
+                        return "Papirus-Dark is not installed on this system. Install it via your package manager."
+                    return "Adwaita icons are not installed on this system."
+                }
+                color: "#f44336"
+                pointSize: Style.fontSizeS
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: methodCombo.implicitHeight
@@ -303,37 +322,14 @@ ColumnLayout {
                     rebuildCacheProcess.running = true
                 }
             }
-        }
-    }
 
-    // ──────────────────────────────────────────────
-    // Bottom action buttons
-    // ──────────────────────────────────────────────
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Style.marginM
-
-        NButton {
-            text: "Reset to Default"
-            onClicked: {
-                pluginApi?.mainInstance?.resetFolders()
+            NButton {
+                text: "Reset to Default Icons"
+                onClicked: {
+                    pluginApi?.mainInstance?.resetFolders()
+                }
             }
         }
-
-        Item { Layout.fillWidth: true }
-
-        NButton {
-            text: "Apply"
-            onClicked: {
-                root.saveSettings()
-                pluginApi?.mainInstance?.applyFolders()
-            }
-        }
-    }
-
-    Item {
-        Layout.fillHeight: true
     }
 
     // ──────────────────────────────────────────────
@@ -384,6 +380,9 @@ ColumnLayout {
         pluginApi.pluginSettings.accentSource = root.editAccentSource
 
         pluginApi.saveSettings()
+
+        // Trigger recolor with new settings
+        pluginApi?.mainInstance?.applyFolders()
 
         Logger.i("NoctaliaFolders", "Settings saved successfully")
     }
