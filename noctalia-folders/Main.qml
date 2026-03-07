@@ -17,19 +17,27 @@ Item {
         return `${root.currentAccentColor}|${root.dimMode}|${root.iconTheme}`
     }
 
-    // Install detection
+    // Install detection — Noctalia copies
     property bool papirusInstalled: false
     property bool adwaitaInstalled: false
-    property bool papirusSourceAvailable: false
-    property bool adwaitaSourceAvailable: false
     property bool installCheckDone: false
 
+    // Dependency detection — upstream packages
+    property bool papirusIconThemeAvailable: false
+    property bool papirusFoldersAvailable: false
+    property bool adwaitaBaseAvailable: false
+    property bool adwaitaColorsAvailable: false
+    property bool morewaitaAvailable: false
+
     // Settings shortcuts
+    readonly property bool enabled: pluginApi?.pluginSettings?.enabled ?? false
     readonly property bool autoApply: pluginApi?.pluginSettings?.autoApply ?? true
-    readonly property string iconTheme: pluginApi?.pluginSettings?.iconTheme || "papirus"
+    readonly property string iconTheme: pluginApi?.pluginSettings?.iconTheme || "papirus-recolor"
     readonly property bool dimMode: pluginApi?.pluginSettings?.dimMode ?? false
     readonly property string accentSource: pluginApi?.pluginSettings?.accentSource || "mPrimary"
     readonly property bool debugMode: pluginApi?.pluginSettings?.debugMode ?? false
+    readonly property bool setGtkTheme: pluginApi?.pluginSettings?.setGtkTheme ?? true
+    readonly property bool setQtTheme: pluginApi?.pluginSettings?.setQtTheme ?? true
     readonly property string scriptPath: {
         const pluginDir = Qt.resolvedUrl(".").toString().replace("file://", "").replace(/\/$/, "")
         return pluginDir + "/scripts/noctalia-folders"
@@ -53,6 +61,8 @@ Item {
         const dim = overrideDimMode ?? root.dimMode
         let cmd = `"${root.scriptPath}" ${operation} --icon-theme ${theme} --color-source ${source}`
         if (dim) cmd += " --dim"
+        if (!root.setGtkTheme) cmd += " --no-set-gtk"
+        if (!root.setQtTheme) cmd += " --no-set-qt"
         if (root.debugMode) cmd += " --verbose"
         return cmd
     }
@@ -81,7 +91,7 @@ Item {
     }
 
     function _autoApplyIfChanged(reason) {
-        if (root.autoApply && !root.isRunning && root._currentFingerprint() !== root.lastAppliedFingerprint) {
+        if (root.enabled && root.autoApply && !root.isRunning && root._currentFingerprint() !== root.lastAppliedFingerprint) {
             Logger.i("NoctaliaFolders", reason)
             root.applyFolders()
         }
@@ -91,13 +101,12 @@ Item {
         root._autoApplyIfChanged(`Accent (${root.accentSource}) changed to ${root.currentAccentColor}, auto-applying...`)
     }
 
-    // Settings-change handlers removed — only the Color singleton
-    // watcher (above) and the explicit Apply button trigger recoloring.
-
     Component.onCompleted: {
         root.checkInstallStatus()
-        stateCheckProcess.running = true
-        startupTimer.running = true
+        if (root.enabled) {
+            stateCheckProcess.running = true
+            startupTimer.running = true
+        }
     }
 
     Timer {
@@ -163,6 +172,24 @@ Item {
         function install() {
             root.installTheme()
         }
+
+        function enable() {
+            if (pluginApi) {
+                pluginApi.pluginSettings.enabled = true
+                pluginApi.saveSettings()
+                root.checkInstallStatus()
+                stateCheckProcess.running = true
+                startupTimer.running = true
+            }
+        }
+
+        function disable() {
+            if (pluginApi) {
+                pluginApi.pluginSettings.enabled = false
+                pluginApi.saveSettings()
+                root.resetFolders()
+            }
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -170,7 +197,7 @@ Item {
     // ──────────────────────────────────────────────
 
     function applyFolders(overrideIconTheme, overrideAccentSource, overrideDimMode) {
-        if (root.isRunning) return
+        if (!root.enabled || root.isRunning) return
         root.isRunning = true
         applyProcess.command = ["sh", "-c", root.buildCmd("--apply", overrideIconTheme, overrideAccentSource, overrideDimMode)]
         applyProcess.running = true
@@ -295,30 +322,28 @@ Item {
 
     Process {
         id: installCheckProcess
-        command: ["sh", "-c", `
-            echo "papirus_installed=$([ -d "$HOME/.local/share/icons/Papirus-Noctalia" ] && echo 1 || echo 0)"
-            echo "adwaita_installed=$([ -d "$HOME/.local/share/icons/Adwaita-Noctalia" ] && echo 1 || echo 0)"
-            echo "papirus_source=$([ -d /usr/share/icons/Papirus-Dark ] && echo 1 || echo 0)"
-            echo "adwaita_source=$([ -d /usr/share/icons/Adwaita ] && echo 1 || echo 0)"
-        `]
+        command: ["sh", "-c", `"${root.scriptPath}" --check-deps`]
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = text.trim().split("\n")
                 for (const line of lines) {
                     const [key, val] = line.split("=")
+                    if (key === "papirus_icon_theme") root.papirusIconThemeAvailable = val === "1"
+                    if (key === "papirus_folders") root.papirusFoldersAvailable = val === "1"
+                    if (key === "adwaita_base") root.adwaitaBaseAvailable = val === "1"
+                    if (key === "adwaita_colors") root.adwaitaColorsAvailable = val === "1"
+                    if (key === "morewaita") root.morewaitaAvailable = val === "1"
                     if (key === "papirus_installed") root.papirusInstalled = val === "1"
                     if (key === "adwaita_installed") root.adwaitaInstalled = val === "1"
-                    if (key === "papirus_source") root.papirusSourceAvailable = val === "1"
-                    if (key === "adwaita_source") root.adwaitaSourceAvailable = val === "1"
                 }
                 root.installCheckDone = true
-                Logger.i("NoctaliaFolders", `Install check: Papirus=${root.papirusInstalled}, Adwaita=${root.adwaitaInstalled}`)
+                Logger.i("NoctaliaFolders", `Dep check: papirus-icon-theme=${root.papirusIconThemeAvailable}, papirus-folders=${root.papirusFoldersAvailable}, adwaita=${root.adwaitaBaseAvailable}, adwaita-colors=${root.adwaitaColorsAvailable}, morewaita=${root.morewaitaAvailable}`)
             }
         }
         stderr: StdioCollector {}
         onExited: function(exitCode) {
             if (exitCode !== 0) {
-                Logger.e("NoctaliaFolders", `Install check failed with exit code ${exitCode}`)
+                Logger.e("NoctaliaFolders", `Dep check failed with exit code ${exitCode}`)
                 root.installCheckDone = true
             }
         }
