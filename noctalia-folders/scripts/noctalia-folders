@@ -403,6 +403,84 @@ do_install() {
 }
 
 # ──────────────────────────────────────────────
+# Install upstream dependencies
+# ──────────────────────────────────────────────
+
+do_install_dep() {
+    local dep="$1"
+    case "$dep" in
+        papirus-icon-theme)
+            msg "Installing papirus-icon-theme to $ICONS_USER ..."
+            wget -qO- https://git.io/papirus-icon-theme-install | env DESTDIR="$ICONS_USER" sh
+            msg "papirus-icon-theme installed."
+            ;;
+        papirus-folders)
+            msg "Installing papirus-folders ..."
+            local tmp_dir
+            tmp_dir="$(mktemp -d)"
+            git clone --depth 1 https://github.com/PapirusDevelopmentTeam/papirus-folders.git "$tmp_dir"
+            "$tmp_dir/install.sh"
+            rm -rf "$tmp_dir"
+            msg "papirus-folders installed."
+            ;;
+        adwaita-colors)
+            msg "Installing Adwaita Colors to $ICONS_USER ..."
+            local tmp_dir
+            tmp_dir="$(mktemp -d)"
+            git clone --depth 1 https://github.com/dpejoh/Adwaita-colors.git "$tmp_dir"
+            (cd "$tmp_dir" && ./setup -i)
+            rm -rf "$tmp_dir"
+            msg "Adwaita Colors installed."
+            ;;
+        morewaita)
+            msg "Installing MoreWaita to $ICONS_USER ..."
+            local tmp_dir
+            tmp_dir="$(mktemp -d)"
+            git clone --depth 1 https://github.com/somepaulo/MoreWaita.git "$tmp_dir"
+            (cd "$tmp_dir" && ./install.sh)
+            rm -rf "$tmp_dir"
+            msg "MoreWaita installed."
+            ;;
+        *)
+            fatal "Unknown dependency: $dep. Valid: papirus-icon-theme, papirus-folders, adwaita-colors, morewaita"
+            ;;
+    esac
+}
+
+do_check_deps() {
+    local check_dir found=0
+
+    found=0
+    for check_dir in "$HOME/.local/share/icons/Papirus-Dark" "/usr/share/icons/Papirus-Dark" "/usr/local/share/icons/Papirus-Dark"; do
+        [ -d "$check_dir" ] && { found=1; break; }
+    done
+    echo "papirus_icon_theme=$found"
+
+    command -v papirus-folders &>/dev/null && echo "papirus_folders=1" || echo "papirus_folders=0"
+
+    found=0
+    for check_dir in "$HOME/.local/share/icons/Adwaita" "/usr/share/icons/Adwaita" "/usr/local/share/icons/Adwaita"; do
+        [ -d "$check_dir" ] && { found=1; break; }
+    done
+    echo "adwaita_base=$found"
+
+    found=0
+    for check_dir in "$HOME/.local/share/icons" "/usr/share/icons" "/usr/local/share/icons"; do
+        [ -d "$check_dir/Adwaita-blue" ] && { found=1; break; }
+    done
+    echo "adwaita_colors=$found"
+
+    found=0
+    for check_dir in "$HOME/.local/share/icons/MoreWaita" "/usr/share/icons/MoreWaita" "/usr/local/share/icons/MoreWaita"; do
+        [ -d "$check_dir" ] && { found=1; break; }
+    done
+    echo "morewaita=$found"
+
+    [ -d "$ICONS_USER/$PAPIRUS_THEME_NAME" ] && echo "papirus_installed=1" || echo "papirus_installed=0"
+    [ -d "$ICONS_USER/$ADWAITA_THEME_NAME" ] && echo "adwaita_installed=1" || echo "adwaita_installed=0"
+}
+
+# ──────────────────────────────────────────────
 # Batch sed helpers (15x faster than per-file loops)
 # ──────────────────────────────────────────────
 
@@ -718,6 +796,8 @@ USAGE
   $PROGNAME --apply <scheme>                  Apply specific colorscheme
   $PROGNAME --reset                           Revert to default icons
   $PROGNAME --status                          Show current state
+  $PROGNAME --install-dep <name>              Install upstream dependency
+  $PROGNAME --check-deps                      Check all dependency status
   $PROGNAME --version                         Print version
   $PROGNAME --help                            Show this help
 
@@ -735,6 +815,12 @@ EXAMPLES
   $PROGNAME --apply --icon-theme adwaita-match
   $PROGNAME --apply --icon-theme adwaita-recolor --dim
   $PROGNAME --reset
+
+DEPENDENCIES
+  papirus-icon-theme    Papirus icon theme (for recolor mode)
+  papirus-folders       Papirus folder color tool (for closest match)
+  adwaita-colors        Adwaita color variants (for closest match)
+  morewaita             MoreWaita icon extensions (optional)
 EOF
     exit "${1:-0}"
 }
@@ -774,6 +860,10 @@ main() {
             --no-set-gtk) SET_GTK="false" ;;
             --set-qt)     SET_QT="true" ;;
             --no-set-qt)  SET_QT="false" ;;
+            --install-dep)
+                [ -n "${2:-}" ] || fatal "--install-dep requires an argument"
+                operation="install-dep"; scheme_arg="$2"; shift ;;
+            --check-deps) operation="check-deps" ;;
             --verbose|-v) VERBOSE="true" ;;
             --version)   printf "%s %s\n" "$PROGNAME" "$VERSION"; exit 0 ;;
             --help|-h)   usage 0 ;;
@@ -783,11 +873,13 @@ main() {
     done
 
     case "$operation" in
-        install) do_install ;;
-        apply)   do_apply "$scheme_arg" ;;
-        reset)   do_reset ;;
-        status)  do_status ;;
-        *)       usage 2 ;;
+        install)     do_install ;;
+        apply)       do_apply "$scheme_arg" ;;
+        reset)       do_reset ;;
+        status)      do_status ;;
+        install-dep) do_install_dep "$scheme_arg" ;;
+        check-deps)  do_check_deps ;;
+        *)           usage 2 ;;
     esac
 }
 
