@@ -334,6 +334,15 @@ ColumnLayout {
                     pluginApi?.mainInstance?.resetFolders()
                 }
             }
+
+            NToggle {
+                label: "Debug logging"
+                description: "Log detailed diagnostic info to console (useful for troubleshooting)"
+                checked: pluginApi?.pluginSettings?.debugMode ?? false
+                onToggled: {
+                    if (pluginApi) pluginApi.pluginSettings.debugMode = checked
+                }
+            }
         }
     }
 
@@ -389,8 +398,8 @@ ColumnLayout {
 
         pluginApi.saveSettings()
 
-        // Trigger recolor with new settings
-        pluginApi?.mainInstance?.applyFolders()
+        // Trigger recolor with explicit values (bypasses stale QML bindings)
+        pluginApi?.mainInstance?.applyFolders(root.editIconTheme, sourceKey, root.editDimMode)
 
         Logger.i("NoctaliaFolders", "Settings saved successfully")
     }

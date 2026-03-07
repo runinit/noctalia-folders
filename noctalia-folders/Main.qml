@@ -29,6 +29,7 @@ Item {
     readonly property string iconTheme: pluginApi?.pluginSettings?.iconTheme || "papirus"
     readonly property bool dimMode: pluginApi?.pluginSettings?.dimMode ?? false
     readonly property string accentSource: pluginApi?.pluginSettings?.accentSource || "mPrimary"
+    readonly property bool debugMode: pluginApi?.pluginSettings?.debugMode ?? false
     readonly property string scriptPath: {
         const pluginDir = Qt.resolvedUrl(".").toString().replace("file://", "").replace(/\/$/, "")
         return pluginDir + "/scripts/noctalia-folders"
@@ -45,9 +46,14 @@ Item {
     }
 
     // Build command with current settings flags
-    function buildCmd(operation) {
-        let cmd = `"${root.scriptPath}" ${operation} --icon-theme ${root.iconTheme} --color-source ${root.accentSource}`
-        if (root.dimMode) cmd += " --dim"
+    // Optional overrides bypass async QML bindings (used by saveSettings)
+    function buildCmd(operation, overrideIconTheme, overrideAccentSource, overrideDimMode) {
+        const theme = overrideIconTheme ?? root.iconTheme
+        const source = overrideAccentSource ?? root.accentSource
+        const dim = overrideDimMode ?? root.dimMode
+        let cmd = `"${root.scriptPath}" ${operation} --icon-theme ${theme} --color-source ${source}`
+        if (dim) cmd += " --dim"
+        if (root.debugMode) cmd += " --verbose"
         return cmd
     }
 
@@ -163,10 +169,10 @@ Item {
     // Script execution
     // ──────────────────────────────────────────────
 
-    function applyFolders() {
+    function applyFolders(overrideIconTheme, overrideAccentSource, overrideDimMode) {
         if (root.isRunning) return
         root.isRunning = true
-        applyProcess.command = ["sh", "-c", root.buildCmd("--apply")]
+        applyProcess.command = ["sh", "-c", root.buildCmd("--apply", overrideIconTheme, overrideAccentSource, overrideDimMode)]
         applyProcess.running = true
     }
 

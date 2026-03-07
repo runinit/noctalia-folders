@@ -20,7 +20,8 @@
       "autoApply": true,
       "iconTheme": "papirus",
       "dimMode": false,
-      "accentSource": "mPrimary"
+      "accentSource": "mPrimary",
+      "debugMode": false
     }
   }
 }

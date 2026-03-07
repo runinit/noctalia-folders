@@ -20,6 +20,8 @@ set -euo pipefail
 
 readonly PROGNAME="$(basename "$0")"
 readonly VERSION="2.1.0"
+VERBOSE="false"
+dbg() { [ "$VERBOSE" = "true" ] && printf "[DEBUG] %s: %s\n" "$PROGNAME" "$*" >&2 || true; }
 
 # Paths
 readonly NOCTALIA_COLORS="$HOME/.config/noctalia/colors.json"
@@ -224,8 +226,11 @@ find_source_dir() {
 save_state() {
     local color="$1" scheme="${2:-unknown}" mode="${3:-$ICON_THEME}" dim_flag="${4:-$DIM_MODE}"
     mkdir -p "$CONFIG_DIR"
+    local state_file="$CONFIG_DIR/state.${mode}"
+    dbg "save_state: color=$color scheme=$scheme mode=$mode dim=$dim_flag file=$state_file"
     printf 'color=%s\nscheme=%s\nmode=%s\ndim=%s\ntimestamp=%s\n' \
-        "$color" "$scheme" "$mode" "$dim_flag" "$(date -Iseconds)" > "$CONFIG_FILE"
+        "$color" "$scheme" "$mode" "$dim_flag" "$(date -Iseconds)" > "$state_file"
+    cp "$state_file" "$CONFIG_FILE"  # backward compat for QML state reader
 }
 
 load_state_mode() { grep '^mode=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || echo ""; }
@@ -421,10 +426,12 @@ batch_sed_adwaita() {
 # ──────────────────────────────────────────────
 
 do_restore_papirus_quietly() {
-    [ -f "$CONFIG_FILE" ] || return 0
+    local state_file="$CONFIG_DIR/state.papirus"
+    [ -f "$state_file" ] || { dbg "restore_papirus: no state file ($state_file), skipping"; return 0; }
     local prev_color prev_dim
-    prev_color="$(grep '^color=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)"
-    prev_dim="$(load_state_dim)"
+    prev_color="$(grep '^color=' "$state_file" 2>/dev/null | cut -d= -f2)"
+    prev_dim="$(grep '^dim=' "$state_file" 2>/dev/null | cut -d= -f2 || echo "false")"
+    dbg "restore_papirus: state_file=$state_file prev_color=$prev_color prev_dim=$prev_dim"
     [ -n "$prev_color" ] || return 0
 
     local colors
@@ -433,6 +440,8 @@ do_restore_papirus_quietly() {
     old_main="$(echo "$colors" | sed -n '1p')"
     old_dark="$(echo "$colors" | sed -n '2p')"
     old_accent="$(echo "$colors" | sed -n '3p')"
+    dbg "restore_papirus: old_main=$old_main old_dark=$old_dark old_accent=$old_accent"
+    dbg "restore_papirus: replacing with base: $PAPIRUS_BASE_MAIN $PAPIRUS_BASE_DARK $PAPIRUS_BASE_ACCENT"
 
     batch_sed_papirus "$ICONS_USER/$PAPIRUS_THEME_NAME" \
         "$old_main" "$old_dark" "$old_accent" \
@@ -440,10 +449,12 @@ do_restore_papirus_quietly() {
 }
 
 do_restore_adwaita_quietly() {
-    [ -f "$CONFIG_FILE" ] || return 0
+    local state_file="$CONFIG_DIR/state.adwaita-recolor"
+    [ -f "$state_file" ] || { dbg "restore_adwaita: no state file ($state_file), skipping"; return 0; }
     local prev_color prev_dim
-    prev_color="$(grep '^color=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)"
-    prev_dim="$(load_state_dim)"
+    prev_color="$(grep '^color=' "$state_file" 2>/dev/null | cut -d= -f2)"
+    prev_dim="$(grep '^dim=' "$state_file" 2>/dev/null | cut -d= -f2 || echo "false")"
+    dbg "restore_adwaita: state_file=$state_file prev_color=$prev_color prev_dim=$prev_dim"
     [ -n "$prev_color" ] || return 0
 
     local colors
@@ -454,6 +465,8 @@ do_restore_adwaita_quietly() {
     old_3="$(echo "$colors" | sed -n '3p')"
     old_4="$(echo "$colors" | sed -n '4p')"
     old_5="$(echo "$colors" | sed -n '5p')"
+    dbg "restore_adwaita: old shades: $old_1 $old_2 $old_3 $old_4 $old_5"
+    dbg "restore_adwaita: replacing with base: $ADWAITA_BASE_1 $ADWAITA_BASE_2 $ADWAITA_BASE_3 $ADWAITA_BASE_4 $ADWAITA_BASE_5"
 
     batch_sed_adwaita "$ICONS_USER/$ADWAITA_THEME_NAME" \
         "$old_1" "$old_2" "$old_3" "$old_4" "$old_5" \
@@ -466,6 +479,7 @@ do_restore_adwaita_quietly() {
 
 do_apply() {
     local scheme_arg="${1:-}"
+    dbg "do_apply: icon_theme=$ICON_THEME color_source=$COLOR_SOURCE dim=$DIM_MODE scheme_arg=$scheme_arg"
 
     # Single python call: read colors + derive shades
     local result
@@ -581,7 +595,7 @@ do_reset() {
         *) msg "No previous mode, resetting ..." ;;
     esac
 
-    rm -f "$CONFIG_FILE"
+    rm -f "$CONFIG_FILE" "$CONFIG_DIR"/state.*
     revert_icon_theme "$prev_mode"
     msg "Reset complete."
 }
@@ -707,6 +721,7 @@ OPTIONS
   --icon-theme <mode>      papirus | adwaita-match | adwaita-recolor
   --color-source <prop>    mPrimary | mSecondary | mTertiary | mHover
   --dim                    Desaturate 30% + darken 15%
+  --verbose, -v            Print debug diagnostics to stderr
 
 EXAMPLES
   $PROGNAME --install && $PROGNAME --apply
@@ -747,6 +762,7 @@ main() {
                 [ -n "${2:-}" ] || fatal "--color-source requires an argument"
                 COLOR_SOURCE="$2"; shift ;;
             --dim)       DIM_MODE="true" ;;
+            --verbose|-v) VERBOSE="true" ;;
             --version)   printf "%s %s\n" "$PROGNAME" "$VERSION"; exit 0 ;;
             --help|-h)   usage 0 ;;
             *)           err "unknown option: $1"; usage 2 ;;
