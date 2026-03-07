@@ -658,40 +658,44 @@ apply_icon_theme() {
     esac
 
     # Force GTK to re-read icons by toggling theme away and back
-    if command -v gsettings &>/dev/null; then
-        gsettings set org.gnome.desktop.interface icon-theme "$base_theme" 2>/dev/null
-        sleep 0.5
-        gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null
-        msg "Set GNOME/GTK -> $theme (refreshed)"
-    fi
-
-    local gtk3_ini="$HOME/.config/gtk-3.0/settings.ini"
-    [ -f "$gtk3_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk3_ini" 2>/dev/null || true
-
-    local gtk4_ini="$HOME/.config/gtk-4.0/settings.ini"
-    [ -f "$gtk4_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk4_ini" 2>/dev/null || true
-
-    local kdeglobals="$HOME/.config/kdeglobals"
-    if [ -f "$kdeglobals" ]; then
-        if grep -q '^\[Icons\]' "$kdeglobals"; then
-            sed -i "/^\[Icons\]/,/^\[/{s/^Theme=.*/Theme=$theme/}" "$kdeglobals"
-        else
-            printf '\n[Icons]\nTheme=%s\n' "$theme" >> "$kdeglobals"
+    if [ "$SET_GTK" = "true" ]; then
+        if command -v gsettings &>/dev/null; then
+            gsettings set org.gnome.desktop.interface icon-theme "$base_theme" 2>/dev/null
+            sleep 0.5
+            gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null
+            msg "Set GNOME/GTK -> $theme (refreshed)"
         fi
+
+        local gtk3_ini="$HOME/.config/gtk-3.0/settings.ini"
+        [ -f "$gtk3_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk3_ini" 2>/dev/null || true
+
+        local gtk4_ini="$HOME/.config/gtk-4.0/settings.ini"
+        [ -f "$gtk4_ini" ] && sed -i "s/^gtk-icon-theme-name=.*/gtk-icon-theme-name=$theme/" "$gtk4_ini" 2>/dev/null || true
     fi
 
-    # qt5ct
-    local qt5ct_conf="$HOME/.config/qt5ct/qt5ct.conf"
-    if [ -f "$qt5ct_conf" ] && grep -q '^\[Appearance\]' "$qt5ct_conf"; then
-        sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt5ct_conf"
-        msg "Set qt5ct → $theme"
-    fi
+    if [ "$SET_QT" = "true" ]; then
+        local kdeglobals="$HOME/.config/kdeglobals"
+        if [ -f "$kdeglobals" ]; then
+            if grep -q '^\[Icons\]' "$kdeglobals"; then
+                sed -i "/^\[Icons\]/,/^\[/{s/^Theme=.*/Theme=$theme/}" "$kdeglobals"
+            else
+                printf '\n[Icons]\nTheme=%s\n' "$theme" >> "$kdeglobals"
+            fi
+        fi
 
-    # qt6ct
-    local qt6ct_conf="$HOME/.config/qt6ct/qt6ct.conf"
-    if [ -f "$qt6ct_conf" ] && grep -q '^\[Appearance\]' "$qt6ct_conf"; then
-        sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt6ct_conf"
-        msg "Set qt6ct → $theme"
+        # qt5ct
+        local qt5ct_conf="$HOME/.config/qt5ct/qt5ct.conf"
+        if [ -f "$qt5ct_conf" ] && grep -q '^\[Appearance\]' "$qt5ct_conf"; then
+            sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt5ct_conf"
+            msg "Set qt5ct → $theme"
+        fi
+
+        # qt6ct
+        local qt6ct_conf="$HOME/.config/qt6ct/qt6ct.conf"
+        if [ -f "$qt6ct_conf" ] && grep -q '^\[Appearance\]' "$qt6ct_conf"; then
+            sed -i "/^\[Appearance\]/,/^\[/{s/^icon_theme=.*/icon_theme=$theme/}" "$qt6ct_conf"
+            msg "Set qt6ct → $theme"
+        fi
     fi
 }
 
@@ -721,6 +725,8 @@ OPTIONS
   --icon-theme <mode>      papirus | adwaita-match | adwaita-recolor
   --color-source <prop>    mPrimary | mSecondary | mTertiary | mHover
   --dim                    Desaturate 30% + darken 15%
+  --set-gtk / --no-set-gtk   Set GTK icon theme (default: set)
+  --set-qt / --no-set-qt     Set QT icon theme (default: set)
   --verbose, -v            Print debug diagnostics to stderr
 
 EXAMPLES
@@ -740,6 +746,8 @@ EOF
 ICON_THEME="papirus"
 DIM_MODE="false"
 COLOR_SOURCE="mPrimary"
+SET_GTK="true"
+SET_QT="true"
 
 main() {
     local operation="" scheme_arg=""
@@ -762,6 +770,10 @@ main() {
                 [ -n "${2:-}" ] || fatal "--color-source requires an argument"
                 COLOR_SOURCE="$2"; shift ;;
             --dim)       DIM_MODE="true" ;;
+            --set-gtk)    SET_GTK="true" ;;
+            --no-set-gtk) SET_GTK="false" ;;
+            --set-qt)     SET_QT="true" ;;
+            --no-set-qt)  SET_QT="false" ;;
             --verbose|-v) VERBOSE="true" ;;
             --version)   printf "%s %s\n" "$PROGNAME" "$VERSION"; exit 0 ;;
             --help|-h)   usage 0 ;;
