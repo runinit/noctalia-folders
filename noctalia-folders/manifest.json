@@ -1,12 +1,12 @@
 {
   "id": "noctalia-folders",
   "name": "Noctalia Folders",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "minNoctaliaVersion": "3.6.0",
   "author": "Christopher",
   "license": "MIT",
   "repository": "https://github.com/runinit/noctalia-folders",
-  "description": "Recolors folder icons to match your Noctalia accent color. Supports Papirus recoloring, Adwaita closest-match, and Adwaita recoloring with optional dim mode. Choose between primary, secondary, tertiary, or hover as the accent source.",
+  "description": "Recolors folder icons to match your Noctalia accent color. Supports Papirus and Adwaita with recolor or closest-match modes, optional dim mode, and GTK/QT icon theme integration.",
   "tags": ["Utility", "Theming"],
   "entryPoints": {
     "main": "Main.qml",
@@ -17,11 +17,14 @@
   },
   "metadata": {
     "defaultSettings": {
+      "enabled": false,
       "autoApply": true,
-      "iconTheme": "papirus",
+      "iconTheme": "papirus-recolor",
       "dimMode": false,
       "accentSource": "mPrimary",
-      "debugMode": false
+      "debugMode": false,
+      "setGtkTheme": true,
+      "setQtTheme": true
     }
   }
 }

@@ -20,7 +20,7 @@
 set -euo pipefail
 
 readonly PROGNAME="$(basename "$0")"
-readonly VERSION="2.1.0"
+readonly VERSION="3.0.0"
 VERBOSE="false"
 dbg() { [ "$VERBOSE" = "true" ] && printf "[DEBUG] %s: %s\n" "$PROGNAME" "$*" >&2 || true; }
 
