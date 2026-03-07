@@ -514,8 +514,8 @@ do_apply() {
             count="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
             msg "Recolored $count SVG files."
             save_state "$primary" "$scheme_name" "papirus" "$DIM_MODE"
-            apply_icon_theme "$PAPIRUS_THEME_NAME"
             do_update_cache "$theme_dir"
+            apply_icon_theme "$PAPIRUS_THEME_NAME"
             ;;
 
         adwaita-match)
@@ -557,8 +557,8 @@ do_apply() {
             count="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
             msg "Recolored $count SVG files."
             save_state "$primary" "$scheme_name" "adwaita-recolor" "$DIM_MODE"
-            apply_icon_theme "$ADWAITA_THEME_NAME"
             do_update_cache "$theme_dir"
+            apply_icon_theme "$ADWAITA_THEME_NAME"
             ;;
 
         *) fatal "Unknown icon theme mode: $ICON_THEME" ;;
@@ -660,7 +660,7 @@ apply_icon_theme() {
     # Force GTK to re-read icons by toggling theme away and back
     if command -v gsettings &>/dev/null; then
         gsettings set org.gnome.desktop.interface icon-theme "$base_theme" 2>/dev/null
-        sleep 0.2
+        sleep 0.5
         gsettings set org.gnome.desktop.interface icon-theme "$theme" 2>/dev/null
         msg "Set GNOME/GTK -> $theme (refreshed)"
     fi
