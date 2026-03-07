@@ -31,10 +31,15 @@ ColumnLayout {
         pluginApi?.manifest?.metadata?.defaultSettings?.dimMode ??
         false
 
-    property string editAccentSource:
-        pluginApi?.pluginSettings?.accentSource ||
-        pluginApi?.manifest?.metadata?.defaultSettings?.accentSource ||
-        "mPrimary"
+    property string editAccentSource: {
+        const saved = pluginApi?.pluginSettings?.accentSource ||
+            pluginApi?.manifest?.metadata?.defaultSettings?.accentSource ||
+            "mPrimary"
+        // NColorChoice uses unprefixed keys (e.g. "primary" not "mPrimary")
+        if (saved.startsWith("m") && saved.length > 1)
+            return saved.charAt(1).toLowerCase() + saved.slice(2)
+        return saved
+    }
 
     // Derived from editIconTheme
     readonly property string editBaseTheme: editIconTheme.startsWith("adwaita") ? "adwaita" : "papirus"
@@ -377,7 +382,10 @@ ColumnLayout {
         pluginApi.pluginSettings.autoApply = root.editAutoApply
         pluginApi.pluginSettings.iconTheme = root.editIconTheme
         pluginApi.pluginSettings.dimMode = root.editDimMode
-        pluginApi.pluginSettings.accentSource = root.editAccentSource
+        const sourceKey = root.editAccentSource.startsWith("m")
+            ? root.editAccentSource
+            : "m" + root.editAccentSource.charAt(0).toUpperCase() + root.editAccentSource.slice(1)
+        pluginApi.pluginSettings.accentSource = sourceKey
 
         pluginApi.saveSettings()
 
