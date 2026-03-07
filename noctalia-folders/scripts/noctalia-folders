@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # noctalia-folders - Recolor folder icons to match your Noctalia theme
 #
-# Supports three modes:
-#   papirus         - Recolor Papirus-Dark folder SVGs (default)
+# Supports four modes:
+#   papirus-recolor - Recolor Papirus-Dark folder SVGs (default)
+#   papirus-match   - Use papirus-folders closest preset color
 #   adwaita-match   - Switch to closest built-in Adwaita-{color} theme
 #   adwaita-recolor - Recolor Adwaita folder SVGs with exact accent
 #
@@ -130,11 +131,30 @@ h, l, s = colorsys.rgb_to_hls(r, g, b)
 if dim:
     h, s, l = dim_color(h, s, l)
 
-if mode == "papirus":
+def dist(c1, c2):
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(c1, c2)))
+
+if mode == "papirus-recolor":
     # 3 shades: main, dark (30%), darkest (65%)
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, l, s)))
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.70), s)))
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.35), s)))
+
+elif mode == "papirus-match":
+    # Find closest papirus-folders preset color
+    presets = {
+        "black": "#4f4f4f", "blue": "#5294e2", "bluegrey": "#607d8b",
+        "breeze": "#4a8bca", "brown": "#ae8e6c", "carmine": "#b13d59",
+        "cyan": "#00bcd4", "darkcyan": "#008394", "deeporange": "#ff5722",
+        "green": "#87b158", "grey": "#8e8e8e", "indigo": "#5c6bc0",
+        "magenta": "#ca71df", "nordic": "#5e81ac", "orange": "#ee923a",
+        "palebrown": "#c4a882", "paleorange": "#f0c67b", "pink": "#f06292",
+        "red": "#e93d40", "teal": "#009688", "violet": "#9b6bdf",
+        "white": "#e4e4e4", "yaru": "#e35641",
+    }
+    target_rgb = tuple(int(x * 255) for x in colorsys.hls_to_rgb(h, l, s))
+    best = min(presets.items(), key=lambda kv: dist(target_rgb, tuple(int(x*255) for x in hex_to_rgb(kv[1]))))
+    print(best[0])
 
 elif mode == "adwaita-recolor":
     # 5 shades: relative HSL offsets from Adwaita base blues
@@ -150,8 +170,6 @@ elif mode == "adwaita-recolor":
 
 elif mode == "adwaita-match":
     # Find closest built-in Adwaita theme
-    def dist(c1, c2):
-        return math.sqrt(sum((a - b) ** 2 for a, b in zip(c1, c2)))
     target_rgb = tuple(int(x * 255) for x in colorsys.hls_to_rgb(h, l, s))
     themes = {
         "Adwaita": "#3584e4", "Adwaita-brown": "#986a44",
@@ -191,7 +209,7 @@ if "$dim" == "true":
     h, s, l = dim_color(h, s, l)
 
 mode = "$mode"
-if mode == "papirus":
+if mode == "papirus-recolor":
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, l, s)))
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.70), s)))
     print(rgb_to_hex(*colorsys.hls_to_rgb(h, max(0, l * 0.35), s)))
@@ -395,7 +413,8 @@ SECTIONEOF
 
 do_install() {
     case "$ICON_THEME" in
-        papirus)         do_install_papirus ;;
+        papirus-recolor) do_install_papirus ;;
+        papirus-match)   msg "Papirus match mode uses papirus-folders directly." ;;
         adwaita-recolor) do_install_adwaita ;;
         adwaita-match)   msg "Adwaita closest-match mode does not require installation." ;;
         *)               fatal "Unknown icon theme mode: $ICON_THEME" ;;
@@ -504,7 +523,7 @@ batch_sed_adwaita() {
 # ──────────────────────────────────────────────
 
 do_restore_papirus_quietly() {
-    local state_file="$CONFIG_DIR/state.papirus"
+    local state_file="$CONFIG_DIR/state.papirus-recolor"
     [ -f "$state_file" ] || { dbg "restore_papirus: no state file ($state_file), skipping"; return 0; }
     local prev_color prev_dim
     prev_color="$(grep '^color=' "$state_file" 2>/dev/null | cut -d= -f2)"
@@ -513,7 +532,7 @@ do_restore_papirus_quietly() {
     [ -n "$prev_color" ] || return 0
 
     local colors
-    colors="$(derive_restore_colors "$prev_color" "$prev_dim" "papirus")"
+    colors="$(derive_restore_colors "$prev_color" "$prev_dim" "papirus-recolor")"
     local old_main old_dark old_accent
     old_main="$(echo "$colors" | sed -n '1p')"
     old_dark="$(echo "$colors" | sed -n '2p')"
@@ -571,7 +590,7 @@ do_apply() {
     [ -n "$primary" ] || fatal "Could not read accent color. Is Noctalia configured?"
 
     case "$ICON_THEME" in
-        papirus)
+        papirus-recolor)
             local theme_dir="$ICONS_USER/$PAPIRUS_THEME_NAME"
             [ -d "$theme_dir" ] || { msg "Not found. Installing ..."; do_install_papirus; }
 
@@ -580,7 +599,7 @@ do_apply() {
             new_dark="$(echo "$result" | sed -n '4p')"
             new_accent="$(echo "$result" | sed -n '5p')"
 
-            msg "Applying $primary from '$scheme_name' (papirus, source: $COLOR_SOURCE) ..."
+            msg "Applying $primary from '$scheme_name' (papirus-recolor, source: $COLOR_SOURCE) ..."
             msg "  Main: $new_main  Dark: $new_dark  Darkest: $new_accent"
 
             do_restore_papirus_quietly
@@ -591,9 +610,25 @@ do_apply() {
             local count
             count="$(find "$theme_dir" -name '*.svg' ! -type l | wc -l)"
             msg "Recolored $count SVG files."
-            save_state "$primary" "$scheme_name" "papirus" "$DIM_MODE"
+            save_state "$primary" "$scheme_name" "papirus-recolor" "$DIM_MODE"
             do_update_cache "$theme_dir"
             apply_icon_theme "$PAPIRUS_THEME_NAME"
+            ;;
+
+        papirus-match)
+            local best_color
+            best_color="$(echo "$result" | sed -n '3p')"
+
+            msg "Applying $primary from '$scheme_name' (papirus-match, source: $COLOR_SOURCE) ..."
+            msg "  Best match: $best_color"
+
+            if ! command -v papirus-folders &>/dev/null; then
+                fatal "papirus-folders is not installed. Run: noctalia-folders --install-dep papirus-folders"
+            fi
+
+            papirus-folders -C "$best_color" --theme Papirus-Dark
+            save_state "$primary" "$scheme_name" "papirus-match" "$DIM_MODE"
+            apply_icon_theme "Papirus-Dark"
             ;;
 
         adwaita-match)
@@ -655,11 +690,17 @@ do_reset() {
     prev_mode="${prev_mode:-$ICON_THEME}"
 
     case "$prev_mode" in
-        papirus)
+        papirus-recolor)
             [ -d "$ICONS_USER/$PAPIRUS_THEME_NAME" ] || fatal "$PAPIRUS_THEME_NAME is not installed."
             msg "Resetting Papirus to default blue ..."
             do_restore_papirus_quietly
             do_update_cache "$ICONS_USER/$PAPIRUS_THEME_NAME"
+            ;;
+        papirus-match)
+            msg "Resetting Papirus to default blue ..."
+            if command -v papirus-folders &>/dev/null; then
+                papirus-folders -C blue --theme Papirus-Dark
+            fi
             ;;
         adwaita-recolor)
             [ -d "$ICONS_USER/$ADWAITA_THEME_NAME" ] || fatal "$ADWAITA_THEME_NAME is not installed."
@@ -778,11 +819,11 @@ apply_icon_theme() {
 }
 
 revert_icon_theme() {
-    local mode="${1:-papirus}"
+    local mode="${1:-papirus-recolor}"
     case "$mode" in
-        papirus)         apply_icon_theme "Papirus-Dark" ;;
+        papirus-recolor|papirus-match) apply_icon_theme "Papirus-Dark" ;;
         adwaita-match|adwaita-recolor) apply_icon_theme "Adwaita" ;;
-        *)               apply_icon_theme "Papirus-Dark" ;;
+        *)                             apply_icon_theme "Papirus-Dark" ;;
     esac
 }
 
@@ -802,7 +843,7 @@ USAGE
   $PROGNAME --help                            Show this help
 
 OPTIONS
-  --icon-theme <mode>      papirus | adwaita-match | adwaita-recolor
+  --icon-theme <mode>      papirus-recolor | papirus-match | adwaita-match | adwaita-recolor
   --color-source <prop>    mPrimary | mSecondary | mTertiary | mHover
   --dim                    Desaturate 30% + darken 15%
   --set-gtk / --no-set-gtk   Set GTK icon theme (default: set)
@@ -829,7 +870,7 @@ EOF
 # Main
 # ──────────────────────────────────────────────
 
-ICON_THEME="papirus"
+ICON_THEME="papirus-recolor"
 DIM_MODE="false"
 COLOR_SOURCE="mPrimary"
 SET_GTK="true"
