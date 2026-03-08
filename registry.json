@@ -4,7 +4,7 @@
     {
       "id": "noctalia-folders",
       "name": "Noctalia Folders",
-      "version": "3.2.4",
+      "version": "3.2.5",
       "official": false,
       "author": "Christopher",
       "description": "Recolors folder icons to match your Noctalia accent color.",
@@ -15,7 +15,7 @@
         "Utility",
         "Theming"
       ],
-      "lastUpdated": "2026-03-07T13:00:00+00:00"
+      "lastUpdated": "2026-03-08T00:00:00+00:00"
     }
   ]
 }
