@@ -197,6 +197,7 @@ ColumnLayout {
     // ──────────────────────────────────────────────
 
     NCollapsible {
+        Layout.fillWidth: true
         label: "Dependency Status"
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
@@ -426,6 +427,7 @@ ColumnLayout {
     // ──────────────────────────────────────────────
 
     NCollapsible {
+        Layout.fillWidth: true
         label: "Behavior"
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
@@ -463,6 +465,7 @@ ColumnLayout {
     // ──────────────────────────────────────────────
 
     NCollapsible {
+        Layout.fillWidth: true
         label: "Advanced"
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
