@@ -214,13 +214,17 @@ ColumnLayout {
 
             MouseArea {
                 Layout.fillWidth: true
-                Layout.preferredHeight: depHeader.implicitHeight
+                Layout.preferredHeight: Math.max(depHeader.implicitHeight, 36)
+                Layout.margins: -Style.marginM
+                Layout.bottomMargin: 0
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.depStatusExpanded = !root.depStatusExpanded
 
                 RowLayout {
                     id: depHeader
                     anchors.fill: parent
+                    anchors.margins: Style.marginM
+                    anchors.bottomMargin: 0
                     spacing: Style.marginS
 
                     NText {
@@ -485,13 +489,17 @@ ColumnLayout {
 
             MouseArea {
                 Layout.fillWidth: true
-                Layout.preferredHeight: behaviorHeader.implicitHeight
+                Layout.preferredHeight: Math.max(behaviorHeader.implicitHeight, 36)
+                Layout.margins: -Style.marginM
+                Layout.bottomMargin: 0
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.behaviorExpanded = !root.behaviorExpanded
 
                 RowLayout {
                     id: behaviorHeader
                     anchors.fill: parent
+                    anchors.margins: Style.marginM
+                    anchors.bottomMargin: 0
                     spacing: Style.marginS
 
                     NText {
@@ -564,13 +572,17 @@ ColumnLayout {
 
             MouseArea {
                 Layout.fillWidth: true
-                Layout.preferredHeight: advancedHeader.implicitHeight
+                Layout.preferredHeight: Math.max(advancedHeader.implicitHeight, 36)
+                Layout.margins: -Style.marginM
+                Layout.bottomMargin: 0
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.advancedExpanded = !root.advancedExpanded
 
                 RowLayout {
                     id: advancedHeader
                     anchors.fill: parent
+                    anchors.margins: Style.marginM
+                    anchors.bottomMargin: 0
                     spacing: Style.marginS
 
                     NText {
