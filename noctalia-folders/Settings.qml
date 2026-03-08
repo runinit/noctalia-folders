@@ -8,6 +8,7 @@ import qs.Services.UI
 
 ColumnLayout {
     id: root
+    width: parent ? parent.width : implicitWidth
     spacing: Style.marginM
 
     property var pluginApi: null
