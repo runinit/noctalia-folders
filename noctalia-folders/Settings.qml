@@ -158,12 +158,12 @@ ColumnLayout {
                     const mi = pluginApi?.mainInstance
                     if (!mi?.installCheckDone) return false
                     if (root.editBaseTheme === "papirus") {
-                        if (root.editMethod === "recolor" && !mi.papirusIconThemeAvailable) return true
-                        if (root.editMethod === "match" && !mi.papirusFoldersAvailable) return true
+                        if (root.editMethod === "recolor" && mi.papirusIconThemeAvailable === "0") return true
+                        if (root.editMethod === "match" && mi.papirusFoldersAvailable === "0") return true
                     }
                     if (root.editBaseTheme === "adwaita") {
-                        if (root.editMethod === "recolor" && !mi.adwaitaBaseAvailable) return true
-                        if (root.editMethod === "match" && !mi.adwaitaColorsAvailable) return true
+                        if (root.editMethod === "recolor" && mi.adwaitaBaseAvailable === "0") return true
+                        if (root.editMethod === "match" && mi.adwaitaColorsAvailable === "0") return true
                     }
                     return false
                 }
@@ -236,7 +236,7 @@ ColumnLayout {
                     color: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                        if (mi.papirusIconThemeAvailable) return "#4caf50"
+                        if (mi.papirusIconThemeAvailable === "user" || mi.papirusIconThemeAvailable === "system") return "#4caf50"
                         if (root.editBaseTheme === "papirus" && root.editMethod === "recolor") return "#f44336"
                         return Color.mOnSurfaceVariant
                     }
@@ -251,7 +251,9 @@ ColumnLayout {
                     text: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return "Checking..."
-                        return mi.papirusIconThemeAvailable ? "Installed" : "Not installed"
+                        if (mi.papirusIconThemeAvailable === "user") return "Installed (user)"
+                        if (mi.papirusIconThemeAvailable === "system") return "Installed (system)"
+                        return "Not installed"
                     }
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeS
@@ -261,7 +263,7 @@ ColumnLayout {
                     text: "Install"
                     visible: {
                         const mi = pluginApi?.mainInstance
-                        return mi?.installCheckDone && !mi.papirusIconThemeAvailable
+                        return mi?.installCheckDone && mi.papirusIconThemeAvailable === "0"
                     }
                     onClicked: root.launchInstallDep("papirus-icon-theme")
                 }
@@ -276,7 +278,7 @@ ColumnLayout {
                     color: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                        if (mi.papirusFoldersAvailable) return "#4caf50"
+                        if (mi.papirusFoldersAvailable === "1") return "#4caf50"
                         if (root.editBaseTheme === "papirus" && root.editMethod === "match") return "#f44336"
                         return Color.mOnSurfaceVariant
                     }
@@ -291,7 +293,7 @@ ColumnLayout {
                     text: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return "Checking..."
-                        return mi.papirusFoldersAvailable ? "Installed" : "Not installed"
+                        return mi.papirusFoldersAvailable === "1" ? "Installed" : "Not installed"
                     }
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeS
@@ -301,7 +303,7 @@ ColumnLayout {
                     text: "Install"
                     visible: {
                         const mi = pluginApi?.mainInstance
-                        return mi?.installCheckDone && !mi.papirusFoldersAvailable
+                        return mi?.installCheckDone && mi.papirusFoldersAvailable === "0"
                     }
                     onClicked: root.launchInstallDep("papirus-folders")
                 }
@@ -326,7 +328,7 @@ ColumnLayout {
                     color: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                        if (mi.adwaitaBaseAvailable) return "#4caf50"
+                        if (mi.adwaitaBaseAvailable === "user" || mi.adwaitaBaseAvailable === "system") return "#4caf50"
                         if (root.editBaseTheme === "adwaita" && root.editMethod === "recolor") return "#f44336"
                         return Color.mOnSurfaceVariant
                     }
@@ -341,7 +343,9 @@ ColumnLayout {
                     text: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return "Checking..."
-                        return mi.adwaitaBaseAvailable ? "Installed" : "Not installed"
+                        if (mi.adwaitaBaseAvailable === "user") return "Installed (user)"
+                        if (mi.adwaitaBaseAvailable === "system") return "Installed (system)"
+                        return "Not installed"
                     }
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeS
@@ -358,7 +362,7 @@ ColumnLayout {
                     color: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                        if (mi.adwaitaColorsAvailable) return "#4caf50"
+                        if (mi.adwaitaColorsAvailable === "user" || mi.adwaitaColorsAvailable === "system") return "#4caf50"
                         if (root.editBaseTheme === "adwaita" && root.editMethod === "match") return "#f44336"
                         return Color.mOnSurfaceVariant
                     }
@@ -373,7 +377,9 @@ ColumnLayout {
                     text: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return "Checking..."
-                        return mi.adwaitaColorsAvailable ? "Installed" : "Not installed"
+                        if (mi.adwaitaColorsAvailable === "user") return "Installed (user)"
+                        if (mi.adwaitaColorsAvailable === "system") return "Installed (system)"
+                        return "Not installed"
                     }
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeS
@@ -383,7 +389,7 @@ ColumnLayout {
                     text: "Install"
                     visible: {
                         const mi = pluginApi?.mainInstance
-                        return mi?.installCheckDone && !mi.adwaitaColorsAvailable
+                        return mi?.installCheckDone && mi.adwaitaColorsAvailable === "0"
                     }
                     onClicked: root.launchInstallDep("adwaita-colors")
                 }
@@ -398,7 +404,7 @@ ColumnLayout {
                     color: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                        if (mi.morewaitaAvailable) return "#4caf50"
+                        if (mi.morewaitaAvailable === "user" || mi.morewaitaAvailable === "system") return "#4caf50"
                         if (root.editBaseTheme === "adwaita") return "#f44336"
                         return Color.mOnSurfaceVariant
                     }
@@ -413,7 +419,9 @@ ColumnLayout {
                     text: {
                         const mi = pluginApi?.mainInstance
                         if (!mi?.installCheckDone) return "Checking..."
-                        return mi.morewaitaAvailable ? "Installed" : "Not installed"
+                        if (mi.morewaitaAvailable === "user") return "Installed (user)"
+                        if (mi.morewaitaAvailable === "system") return "Installed (system)"
+                        return "Not installed"
                     }
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeS
@@ -423,7 +431,7 @@ ColumnLayout {
                     text: "Install"
                     visible: {
                         const mi = pluginApi?.mainInstance
-                        return mi?.installCheckDone && !mi.morewaitaAvailable
+                        return mi?.installCheckDone && mi.morewaitaAvailable === "0"
                     }
                     onClicked: root.launchInstallDep("morewaita")
                 }

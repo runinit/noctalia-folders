@@ -22,12 +22,12 @@ Item {
     property bool adwaitaInstalled: false
     property bool installCheckDone: false
 
-    // Dependency detection — upstream packages
-    property bool papirusIconThemeAvailable: false
-    property bool papirusFoldersAvailable: false
-    property bool adwaitaBaseAvailable: false
-    property bool adwaitaColorsAvailable: false
-    property bool morewaitaAvailable: false
+    // Dependency detection — upstream packages (values: "user", "system", "1", or "0")
+    property string papirusIconThemeAvailable: "0"
+    property string papirusFoldersAvailable: "0"
+    property string adwaitaBaseAvailable: "0"
+    property string adwaitaColorsAvailable: "0"
+    property string morewaitaAvailable: "0"
 
     // Settings shortcuts
     readonly property bool enabled: pluginApi?.pluginSettings?.enabled ?? false
@@ -328,16 +328,16 @@ Item {
                 const lines = text.trim().split("\n")
                 for (const line of lines) {
                     const [key, val] = line.split("=")
-                    if (key === "papirus_icon_theme") root.papirusIconThemeAvailable = val === "1"
-                    if (key === "papirus_folders") root.papirusFoldersAvailable = val === "1"
-                    if (key === "adwaita_base") root.adwaitaBaseAvailable = val === "1"
-                    if (key === "adwaita_colors") root.adwaitaColorsAvailable = val === "1"
-                    if (key === "morewaita") root.morewaitaAvailable = val === "1"
+                    if (key === "papirus_icon_theme") root.papirusIconThemeAvailable = val
+                    if (key === "papirus_folders") root.papirusFoldersAvailable = val
+                    if (key === "adwaita_base") root.adwaitaBaseAvailable = val
+                    if (key === "adwaita_colors") root.adwaitaColorsAvailable = val
+                    if (key === "morewaita") root.morewaitaAvailable = val
                     if (key === "papirus_installed") root.papirusInstalled = val === "1"
                     if (key === "adwaita_installed") root.adwaitaInstalled = val === "1"
                 }
                 root.installCheckDone = true
-                Logger.i("NoctaliaFolders", `Dep check: papirus-icon-theme=${root.papirusIconThemeAvailable}, papirus-folders=${root.papirusFoldersAvailable}, adwaita=${root.adwaitaBaseAvailable}, adwaita-colors=${root.adwaitaColorsAvailable}, morewaita=${root.morewaitaAvailable}`)
+                Logger.i("NoctaliaFolders", `Deps: papirus-icon-theme=${root.papirusIconThemeAvailable}, papirus-folders=${root.papirusFoldersAvailable}, adwaita=${root.adwaitaBaseAvailable}, adwaita-colors=${root.adwaitaColorsAvailable}, morewaita=${root.morewaitaAvailable}`)
             }
         }
         stderr: StdioCollector {}

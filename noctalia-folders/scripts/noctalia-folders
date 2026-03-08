@@ -467,34 +467,46 @@ do_install_dep() {
 }
 
 do_check_deps() {
-    local check_dir found=0
+    # papirus-icon-theme
+    if [ -d "$HOME/.local/share/icons/Papirus-Dark" ]; then
+        echo "papirus_icon_theme=user"
+    elif [ -d "/usr/share/icons/Papirus-Dark" ] || [ -d "/usr/local/share/icons/Papirus-Dark" ]; then
+        echo "papirus_icon_theme=system"
+    else
+        echo "papirus_icon_theme=0"
+    fi
 
-    found=0
-    for check_dir in "$HOME/.local/share/icons/Papirus-Dark" "/usr/share/icons/Papirus-Dark" "/usr/local/share/icons/Papirus-Dark"; do
-        [ -d "$check_dir" ] && { found=1; break; }
-    done
-    echo "papirus_icon_theme=$found"
-
+    # papirus-folders
     command -v papirus-folders &>/dev/null && echo "papirus_folders=1" || echo "papirus_folders=0"
 
-    found=0
-    for check_dir in "$HOME/.local/share/icons/Adwaita" "/usr/share/icons/Adwaita" "/usr/local/share/icons/Adwaita"; do
-        [ -d "$check_dir" ] && { found=1; break; }
-    done
-    echo "adwaita_base=$found"
+    # adwaita base
+    if [ -d "$HOME/.local/share/icons/Adwaita" ]; then
+        echo "adwaita_base=user"
+    elif [ -d "/usr/share/icons/Adwaita" ] || [ -d "/usr/local/share/icons/Adwaita" ]; then
+        echo "adwaita_base=system"
+    else
+        echo "adwaita_base=0"
+    fi
 
-    found=0
-    for check_dir in "$HOME/.local/share/icons" "/usr/share/icons" "/usr/local/share/icons"; do
-        [ -d "$check_dir/Adwaita-blue" ] && { found=1; break; }
-    done
-    echo "adwaita_colors=$found"
+    # adwaita-colors
+    if [ -d "$HOME/.local/share/icons/Adwaita-blue" ]; then
+        echo "adwaita_colors=user"
+    elif [ -d "/usr/share/icons/Adwaita-blue" ] || [ -d "/usr/local/share/icons/Adwaita-blue" ]; then
+        echo "adwaita_colors=system"
+    else
+        echo "adwaita_colors=0"
+    fi
 
-    found=0
-    for check_dir in "$HOME/.local/share/icons/MoreWaita" "/usr/share/icons/MoreWaita" "/usr/local/share/icons/MoreWaita"; do
-        [ -d "$check_dir" ] && { found=1; break; }
-    done
-    echo "morewaita=$found"
+    # morewaita
+    if [ -d "$HOME/.local/share/icons/MoreWaita" ]; then
+        echo "morewaita=user"
+    elif [ -d "/usr/share/icons/MoreWaita" ] || [ -d "/usr/local/share/icons/MoreWaita" ]; then
+        echo "morewaita=system"
+    else
+        echo "morewaita=0"
+    fi
 
+    # Noctalia copies (always user space)
     [ -d "$ICONS_USER/$PAPIRUS_THEME_NAME" ] && echo "papirus_installed=1" || echo "papirus_installed=0"
     [ -d "$ICONS_USER/$ADWAITA_THEME_NAME" ] && echo "adwaita_installed=1" || echo "adwaita_installed=0"
 }
@@ -624,6 +636,16 @@ do_apply() {
 
             if ! command -v papirus-folders &>/dev/null; then
                 fatal "papirus-folders is not installed. Run: noctalia-folders --install-dep papirus-folders"
+            fi
+
+            # Ensure Papirus-Dark exists in user space (papirus-folders can't modify system icons)
+            if [ ! -d "$HOME/.local/share/icons/Papirus-Dark" ]; then
+                if [ -d "/usr/share/icons/Papirus-Dark" ] || [ -d "/usr/local/share/icons/Papirus-Dark" ]; then
+                    msg "Papirus-Dark is system-only. Installing user copy ..."
+                    wget -qO- https://git.io/papirus-icon-theme-install | env DESTDIR="$HOME/.local/share/icons" sh
+                else
+                    fatal "Papirus-Dark is not installed. Run: noctalia-folders --install-dep papirus-icon-theme"
+                fi
             fi
 
             papirus-folders -C "$best_color" --theme Papirus-Dark
