@@ -65,7 +65,7 @@ ColumnLayout {
         return baseTheme + "-" + method
     }
 
-    // (collapsible sections use NCollapsible with lighter headerColor)
+    property int sectionTab: 0
 
     // ──────────────────────────────────────────────
     // Enable Switch
@@ -94,10 +94,27 @@ ColumnLayout {
     }
 
     // ──────────────────────────────────────────────
-    // Appearance
+    // Section Tabs
+    // ──────────────────────────────────────────────
+
+    NTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.sectionTab
+        enabled: root.editEnabled
+        opacity: enabled ? 1.0 : 0.4
+
+        NTabButton { text: "Appearance";   tabIndex: 0; checked: root.sectionTab === 0; onClicked: root.sectionTab = 0 }
+        NTabButton { text: "Behavior";     tabIndex: 1; checked: root.sectionTab === 1; onClicked: root.sectionTab = 1 }
+        NTabButton { text: "Dependencies"; tabIndex: 2; checked: root.sectionTab === 2; onClicked: root.sectionTab = 2 }
+        NTabButton { text: "Advanced";     tabIndex: 3; checked: root.sectionTab === 3; onClicked: root.sectionTab = 3 }
+    }
+
+    // ──────────────────────────────────────────────
+    // Tab: Appearance
     // ──────────────────────────────────────────────
 
     NBox {
+        visible: root.sectionTab === 0
         Layout.fillWidth: true
         Layout.preferredHeight: appearanceContent.implicitHeight + Style.marginM * 2
         color: Color.mSurfaceVariant
@@ -109,13 +126,6 @@ ColumnLayout {
             anchors.fill: parent
             anchors.margins: Style.marginM
             spacing: Style.marginS
-
-            NText {
-                text: "Appearance"
-                pointSize: Style.fontSizeL
-                font.weight: Style.fontWeightBold
-                color: Color.mOnSurface
-            }
 
             NColorChoice {
                 label: "Accent source"
@@ -169,11 +179,11 @@ ColumnLayout {
                 text: {
                     if (root.editBaseTheme === "papirus") {
                         if (root.editMethod === "match")
-                            return "papirus-folders is not installed. Install it from Dependency Status below."
-                        return "Papirus-Dark is not installed. Install it from Dependency Status below."
+                            return "papirus-folders is not installed. Install it from the Dependencies tab."
+                        return "Papirus-Dark is not installed. Install it from the Dependencies tab."
                     }
                     if (root.editMethod === "match")
-                        return "Adwaita Colors is not installed. Install it from Dependency Status below."
+                        return "Adwaita Colors is not installed. Install it from the Dependencies tab."
                     return "Adwaita icons are not installed on this system."
                 }
                 color: "#f44336"
@@ -194,299 +204,272 @@ ColumnLayout {
     }
 
     // ──────────────────────────────────────────────
-    // Dependency Status
+    // Tab: Behavior
     // ──────────────────────────────────────────────
 
-    NCollapsible {
+    NBox {
+        visible: root.sectionTab === 1
         Layout.fillWidth: true
-        label: "Dependency Status"
-        headerColor: Qt.lighter(Color.mSurfaceVariant, 1.15)
+        Layout.preferredHeight: behaviorContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
 
-        // ── Papirus ──
-
-        NText {
-            text: "Papirus"
-            pointSize: Style.fontSizeM
-            font.weight: Style.fontWeightBold
-            color: Color.mOnSurface
-        }
-
-        // papirus-icon-theme
-        RowLayout {
+        ColumnLayout {
+            id: behaviorContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
             spacing: Style.marginS
 
-            Rectangle {
-                width: 10; height: 10; radius: 5
-                color: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                    if (mi.papirusIconThemeAvailable === "user" || mi.papirusIconThemeAvailable === "system") return "#4caf50"
-                    if (root.editBaseTheme === "papirus" && root.editMethod === "recolor") return "#f44336"
-                    return Color.mOnSurfaceVariant
+            NToggle {
+                label: "Auto-apply on theme change"
+                description: "Automatically recolor folder icons when the Noctalia colorscheme changes"
+                checked: root.editAutoApply
+                onToggled: {
+                    root.editAutoApply = checked
                 }
-                Layout.alignment: Qt.AlignVCenter
             }
-            NText {
-                text: "papirus-icon-theme"
-                color: Color.mOnSurface
-                pointSize: Style.fontSizeM
-            }
-            NText {
-                text: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return "Checking..."
-                    if (mi.papirusIconThemeAvailable === "user") return "Installed (user)"
-                    if (mi.papirusIconThemeAvailable === "system") return "Installed (system)"
-                    return "Not installed"
-                }
-                color: Color.mOnSurfaceVariant
-                pointSize: Style.fontSizeS
-            }
-            Item { Layout.fillWidth: true }
-            NButton {
-                text: "Install"
-                visible: {
-                    const mi = pluginApi?.mainInstance
-                    return mi?.installCheckDone && mi.papirusIconThemeAvailable === "0"
-                }
-                onClicked: root.launchInstallDep("papirus-icon-theme")
-            }
-        }
 
-        // papirus-folders
-        RowLayout {
-            spacing: Style.marginS
+            NToggle {
+                label: "Set GTK icon theme"
+                description: "Update gsettings and GTK config files when applying"
+                checked: root.editSetGtkTheme
+                onToggled: {
+                    root.editSetGtkTheme = checked
+                }
+            }
 
-            Rectangle {
-                width: 10; height: 10; radius: 5
-                color: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                    if (mi.papirusFoldersAvailable === "1") return "#4caf50"
-                    if (root.editBaseTheme === "papirus" && root.editMethod === "match") return "#f44336"
-                    return Color.mOnSurfaceVariant
+            NToggle {
+                label: "Set QT icon theme"
+                description: "Update qt5ct, qt6ct, and kdeglobals config files when applying"
+                checked: root.editSetQtTheme
+                onToggled: {
+                    root.editSetQtTheme = checked
                 }
-                Layout.alignment: Qt.AlignVCenter
-            }
-            NText {
-                text: "papirus-folders"
-                color: Color.mOnSurface
-                pointSize: Style.fontSizeM
-            }
-            NText {
-                text: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return "Checking..."
-                    return mi.papirusFoldersAvailable === "1" ? "Installed" : "Not installed"
-                }
-                color: Color.mOnSurfaceVariant
-                pointSize: Style.fontSizeS
-            }
-            Item { Layout.fillWidth: true }
-            NButton {
-                text: "Install"
-                visible: {
-                    const mi = pluginApi?.mainInstance
-                    return mi?.installCheckDone && mi.papirusFoldersAvailable === "0"
-                }
-                onClicked: root.launchInstallDep("papirus-folders")
-            }
-        }
-
-        // ── Adwaita ──
-
-        NText {
-            text: "Adwaita"
-            pointSize: Style.fontSizeM
-            font.weight: Style.fontWeightBold
-            color: Color.mOnSurface
-            Layout.topMargin: Style.marginS
-        }
-
-        // Adwaita (base)
-        RowLayout {
-            spacing: Style.marginS
-
-            Rectangle {
-                width: 10; height: 10; radius: 5
-                color: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                    if (mi.adwaitaBaseAvailable === "user" || mi.adwaitaBaseAvailable === "system") return "#4caf50"
-                    if (root.editBaseTheme === "adwaita" && root.editMethod === "recolor") return "#f44336"
-                    return Color.mOnSurfaceVariant
-                }
-                Layout.alignment: Qt.AlignVCenter
-            }
-            NText {
-                text: "Adwaita (base)"
-                color: Color.mOnSurface
-                pointSize: Style.fontSizeM
-            }
-            NText {
-                text: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return "Checking..."
-                    if (mi.adwaitaBaseAvailable === "user") return "Installed (user)"
-                    if (mi.adwaitaBaseAvailable === "system") return "Installed (system)"
-                    return "Not installed"
-                }
-                color: Color.mOnSurfaceVariant
-                pointSize: Style.fontSizeS
-            }
-            Item { Layout.fillWidth: true }
-        }
-
-        // Adwaita Colors
-        RowLayout {
-            spacing: Style.marginS
-
-            Rectangle {
-                width: 10; height: 10; radius: 5
-                color: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                    if (mi.adwaitaColorsAvailable === "user" || mi.adwaitaColorsAvailable === "system") return "#4caf50"
-                    if (root.editBaseTheme === "adwaita" && root.editMethod === "match") return "#f44336"
-                    return Color.mOnSurfaceVariant
-                }
-                Layout.alignment: Qt.AlignVCenter
-            }
-            NText {
-                text: "Adwaita Colors"
-                color: Color.mOnSurface
-                pointSize: Style.fontSizeM
-            }
-            NText {
-                text: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return "Checking..."
-                    if (mi.adwaitaColorsAvailable === "user") return "Installed (user)"
-                    if (mi.adwaitaColorsAvailable === "system") return "Installed (system)"
-                    return "Not installed"
-                }
-                color: Color.mOnSurfaceVariant
-                pointSize: Style.fontSizeS
-            }
-            Item { Layout.fillWidth: true }
-            NButton {
-                text: "Install"
-                visible: {
-                    const mi = pluginApi?.mainInstance
-                    return mi?.installCheckDone && mi.adwaitaColorsAvailable === "0"
-                }
-                onClicked: root.launchInstallDep("adwaita-colors")
-            }
-        }
-
-        // MoreWaita
-        RowLayout {
-            spacing: Style.marginS
-
-            Rectangle {
-                width: 10; height: 10; radius: 5
-                color: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
-                    if (mi.morewaitaAvailable === "user" || mi.morewaitaAvailable === "system") return "#4caf50"
-                    if (root.editBaseTheme === "adwaita") return "#f44336"
-                    return Color.mOnSurfaceVariant
-                }
-                Layout.alignment: Qt.AlignVCenter
-            }
-            NText {
-                text: "MoreWaita"
-                color: Color.mOnSurface
-                pointSize: Style.fontSizeM
-            }
-            NText {
-                text: {
-                    const mi = pluginApi?.mainInstance
-                    if (!mi?.installCheckDone) return "Checking..."
-                    if (mi.morewaitaAvailable === "user") return "Installed (user)"
-                    if (mi.morewaitaAvailable === "system") return "Installed (system)"
-                    return "Not installed"
-                }
-                color: Color.mOnSurfaceVariant
-                pointSize: Style.fontSizeS
-            }
-            Item { Layout.fillWidth: true }
-            NButton {
-                text: "Install"
-                visible: {
-                    const mi = pluginApi?.mainInstance
-                    return mi?.installCheckDone && mi.morewaitaAvailable === "0"
-                }
-                onClicked: root.launchInstallDep("morewaita")
             }
         }
     }
 
     // ──────────────────────────────────────────────
-    // Behavior
+    // Tab: Dependencies
     // ──────────────────────────────────────────────
 
-    NCollapsible {
+    NBox {
+        visible: root.sectionTab === 2
         Layout.fillWidth: true
-        label: "Behavior"
-        headerColor: Qt.lighter(Color.mSurfaceVariant, 1.15)
+        Layout.preferredHeight: depContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
 
-        NToggle {
-            label: "Auto-apply on theme change"
-            description: "Automatically recolor folder icons when the Noctalia colorscheme changes"
-            checked: root.editAutoApply
-            onToggled: {
-                root.editAutoApply = checked
-            }
-        }
+        ColumnLayout {
+            id: depContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
 
-        NToggle {
-            label: "Set GTK icon theme"
-            description: "Update gsettings and GTK config files when applying"
-            checked: root.editSetGtkTheme
-            onToggled: {
-                root.editSetGtkTheme = checked
-            }
-        }
+            // ── Papirus ──
 
-        NToggle {
-            label: "Set QT icon theme"
-            description: "Update qt5ct, qt6ct, and kdeglobals config files when applying"
-            checked: root.editSetQtTheme
-            onToggled: {
-                root.editSetQtTheme = checked
+            NText {
+                text: "Papirus"
+                pointSize: Style.fontSizeM
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+            }
+
+            RowLayout {
+                spacing: Style.marginS
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        if (mi.papirusIconThemeAvailable === "user" || mi.papirusIconThemeAvailable === "system") return "#4caf50"
+                        if (root.editBaseTheme === "papirus" && root.editMethod === "recolor") return "#f44336"
+                        return Color.mOnSurfaceVariant
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                NText { text: "papirus-icon-theme"; color: Color.mOnSurface; pointSize: Style.fontSizeM }
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        if (mi.papirusIconThemeAvailable === "user") return "Installed (user)"
+                        if (mi.papirusIconThemeAvailable === "system") return "Installed (system)"
+                        return "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant; pointSize: Style.fontSizeS
+                }
+                Item { Layout.fillWidth: true }
+                NButton {
+                    text: "Install"
+                    visible: { const mi = pluginApi?.mainInstance; return mi?.installCheckDone && mi.papirusIconThemeAvailable === "0" }
+                    onClicked: root.launchInstallDep("papirus-icon-theme")
+                }
+            }
+
+            RowLayout {
+                spacing: Style.marginS
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        if (mi.papirusFoldersAvailable === "1") return "#4caf50"
+                        if (root.editBaseTheme === "papirus" && root.editMethod === "match") return "#f44336"
+                        return Color.mOnSurfaceVariant
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                NText { text: "papirus-folders"; color: Color.mOnSurface; pointSize: Style.fontSizeM }
+                NText {
+                    text: { const mi = pluginApi?.mainInstance; if (!mi?.installCheckDone) return "Checking..."; return mi.papirusFoldersAvailable === "1" ? "Installed" : "Not installed" }
+                    color: Color.mOnSurfaceVariant; pointSize: Style.fontSizeS
+                }
+                Item { Layout.fillWidth: true }
+                NButton {
+                    text: "Install"
+                    visible: { const mi = pluginApi?.mainInstance; return mi?.installCheckDone && mi.papirusFoldersAvailable === "0" }
+                    onClicked: root.launchInstallDep("papirus-folders")
+                }
+            }
+
+            // ── Adwaita ──
+
+            NText {
+                text: "Adwaita"
+                pointSize: Style.fontSizeM
+                font.weight: Style.fontWeightBold
+                color: Color.mOnSurface
+                Layout.topMargin: Style.marginS
+            }
+
+            RowLayout {
+                spacing: Style.marginS
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        if (mi.adwaitaBaseAvailable === "user" || mi.adwaitaBaseAvailable === "system") return "#4caf50"
+                        if (root.editBaseTheme === "adwaita" && root.editMethod === "recolor") return "#f44336"
+                        return Color.mOnSurfaceVariant
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                NText { text: "Adwaita (base)"; color: Color.mOnSurface; pointSize: Style.fontSizeM }
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        if (mi.adwaitaBaseAvailable === "user") return "Installed (user)"
+                        if (mi.adwaitaBaseAvailable === "system") return "Installed (system)"
+                        return "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant; pointSize: Style.fontSizeS
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            RowLayout {
+                spacing: Style.marginS
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        if (mi.adwaitaColorsAvailable === "user" || mi.adwaitaColorsAvailable === "system") return "#4caf50"
+                        if (root.editBaseTheme === "adwaita" && root.editMethod === "match") return "#f44336"
+                        return Color.mOnSurfaceVariant
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                NText { text: "Adwaita Colors"; color: Color.mOnSurface; pointSize: Style.fontSizeM }
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        if (mi.adwaitaColorsAvailable === "user") return "Installed (user)"
+                        if (mi.adwaitaColorsAvailable === "system") return "Installed (system)"
+                        return "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant; pointSize: Style.fontSizeS
+                }
+                Item { Layout.fillWidth: true }
+                NButton {
+                    text: "Install"
+                    visible: { const mi = pluginApi?.mainInstance; return mi?.installCheckDone && mi.adwaitaColorsAvailable === "0" }
+                    onClicked: root.launchInstallDep("adwaita-colors")
+                }
+            }
+
+            RowLayout {
+                spacing: Style.marginS
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return Color.mOnSurfaceVariant
+                        if (mi.morewaitaAvailable === "user" || mi.morewaitaAvailable === "system") return "#4caf50"
+                        if (root.editBaseTheme === "adwaita") return "#f44336"
+                        return Color.mOnSurfaceVariant
+                    }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                NText { text: "MoreWaita"; color: Color.mOnSurface; pointSize: Style.fontSizeM }
+                NText {
+                    text: {
+                        const mi = pluginApi?.mainInstance
+                        if (!mi?.installCheckDone) return "Checking..."
+                        if (mi.morewaitaAvailable === "user") return "Installed (user)"
+                        if (mi.morewaitaAvailable === "system") return "Installed (system)"
+                        return "Not installed"
+                    }
+                    color: Color.mOnSurfaceVariant; pointSize: Style.fontSizeS
+                }
+                Item { Layout.fillWidth: true }
+                NButton {
+                    text: "Install"
+                    visible: { const mi = pluginApi?.mainInstance; return mi?.installCheckDone && mi.morewaitaAvailable === "0" }
+                    onClicked: root.launchInstallDep("morewaita")
+                }
             }
         }
     }
 
     // ──────────────────────────────────────────────
-    // Advanced
+    // Tab: Advanced
     // ──────────────────────────────────────────────
 
-    NCollapsible {
+    NBox {
+        visible: root.sectionTab === 3
         Layout.fillWidth: true
-        label: "Advanced"
-        headerColor: Qt.lighter(Color.mSurfaceVariant, 1.15)
+        Layout.preferredHeight: advancedContent.implicitHeight + Style.marginM * 2
+        color: Color.mSurfaceVariant
         enabled: root.editEnabled
         opacity: enabled ? 1.0 : 0.4
 
-        NButton {
-            text: "Rebuild Icon Cache"
-            onClicked: {
-                rebuildCacheProcess.running = true
-            }
-        }
+        ColumnLayout {
+            id: advancedContent
+            anchors.fill: parent
+            anchors.margins: Style.marginM
+            spacing: Style.marginS
 
-        NToggle {
-            label: "Debug logging"
-            description: "Log detailed diagnostic info to console (useful for troubleshooting)"
-            checked: pluginApi?.pluginSettings?.debugMode ?? false
-            onToggled: {
-                if (pluginApi) pluginApi.pluginSettings.debugMode = checked
+            NButton {
+                text: "Rebuild Icon Cache"
+                onClicked: {
+                    rebuildCacheProcess.running = true
+                }
+            }
+
+            NToggle {
+                label: "Debug logging"
+                description: "Log detailed diagnostic info to console (useful for troubleshooting)"
+                checked: pluginApi?.pluginSettings?.debugMode ?? false
+                onToggled: {
+                    if (pluginApi) pluginApi.pluginSettings.debugMode = checked
+                }
             }
         }
     }
