@@ -208,17 +208,6 @@ ColumnLayout {
 
         property bool expanded: false
 
-        MouseArea {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: depStatusBox.expanded
-                ? depStatusHeader.height + Style.marginM * 2
-                : parent.height
-            cursorShape: Qt.PointingHandCursor
-            onClicked: depStatusBox.expanded = !depStatusBox.expanded
-        }
-
         ColumnLayout {
             id: depStatusContent
             anchors.fill: parent
@@ -468,6 +457,18 @@ ColumnLayout {
                 }
             }
         }
+
+        // MouseArea on top so it catches clicks on header text
+        MouseArea {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: depStatusBox.expanded
+                ? depStatusHeader.height + Style.marginM * 2
+                : parent.height
+            cursorShape: Qt.PointingHandCursor
+            onClicked: depStatusBox.expanded = !depStatusBox.expanded
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -484,17 +485,6 @@ ColumnLayout {
         opacity: enabled ? 1.0 : 0.4
 
         property bool expanded: false
-
-        MouseArea {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: behaviorBox.expanded
-                ? behaviorHeader.height + Style.marginM * 2
-                : parent.height
-            cursorShape: Qt.PointingHandCursor
-            onClicked: behaviorBox.expanded = !behaviorBox.expanded
-        }
 
         ColumnLayout {
             id: behaviorContent
@@ -553,6 +543,17 @@ ColumnLayout {
                 }
             }
         }
+
+        MouseArea {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: behaviorBox.expanded
+                ? behaviorHeader.height + Style.marginM * 2
+                : parent.height
+            cursorShape: Qt.PointingHandCursor
+            onClicked: behaviorBox.expanded = !behaviorBox.expanded
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -569,17 +570,6 @@ ColumnLayout {
         opacity: enabled ? 1.0 : 0.4
 
         property bool expanded: false
-
-        MouseArea {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: advancedBox.expanded
-                ? advancedHeader.height + Style.marginM * 2
-                : parent.height
-            cursorShape: Qt.PointingHandCursor
-            onClicked: advancedBox.expanded = !advancedBox.expanded
-        }
 
         ColumnLayout {
             id: advancedContent
@@ -626,6 +616,17 @@ ColumnLayout {
                     }
                 }
             }
+        }
+
+        MouseArea {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: advancedBox.expanded
+                ? advancedHeader.height + Style.marginM * 2
+                : parent.height
+            cursorShape: Qt.PointingHandCursor
+            onClicked: advancedBox.expanded = !advancedBox.expanded
         }
     }
 
