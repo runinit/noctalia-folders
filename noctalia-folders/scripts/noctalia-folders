@@ -255,6 +255,76 @@ load_state_mode() { grep '^mode=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || ec
 load_state_dim() { grep '^dim=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || echo "false"; }
 
 # ──────────────────────────────────────────────
+# Mirror parent theme directories
+# ──────────────────────────────────────────────
+# Reads a parent theme's index.theme and:
+#   1. Appends all non-places directory names to the Directories= line
+#   2. Writes [section] entries for each non-places directory
+#   3. Creates empty directories on disk
+#
+# Usage: mirror_parent_dirs <parent_index_theme> <noctalia_theme_dir> <noctalia_index_theme>
+mirror_parent_dirs() {
+    local parent_index="$1"
+    local theme_dir="$2"
+    local noctalia_index="$3"
+
+    [ -f "$parent_index" ] || { msg "Warning: parent index.theme not found at $parent_index, skipping mirror"; return 0; }
+
+    msg "  Mirroring directory declarations from $(dirname "$parent_index") ..."
+
+    local extra_dirs=""
+    local sections=""
+    local current_section=""
+    local in_section=false
+
+    while IFS= read -r line; do
+        # Match section headers like [48x48/apps]
+        if [[ "$line" =~ ^\[([^]]+)\]$ ]]; then
+            current_section="${BASH_REMATCH[1]}"
+            # Skip [Icon Theme] header and any places directories (we handle those)
+            if [[ "$current_section" == "Icon Theme" ]] || [[ "$current_section" == */places ]]; then
+                in_section=false
+                continue
+            fi
+            in_section=true
+            sections+="[${current_section}]"$'\n'
+            [ -n "$extra_dirs" ] && extra_dirs+=","
+            extra_dirs+="$current_section"
+        elif $in_section; then
+            # Accumulate section content (Context=, Size=, Type=, etc.)
+            if [[ -n "$line" ]]; then
+                sections+="$line"$'\n'
+            else
+                sections+=$'\n'
+                in_section=false
+            fi
+        fi
+    done < "$parent_index"
+
+    if [ -z "$extra_dirs" ]; then
+        msg "  No extra directories found in parent theme"
+        return 0
+    fi
+
+    # Append extra dirs to the Directories= line in noctalia index.theme
+    sed -i "s|^Directories=\(.*\)|Directories=\1,${extra_dirs}|" "$noctalia_index"
+
+    # Append section definitions
+    printf '%s' "$sections" >> "$noctalia_index"
+
+    # Create empty directories on disk
+    local dir
+    local IFS=','
+    for dir in $extra_dirs; do
+        mkdir -p "$theme_dir/$dir"
+    done
+
+    local count
+    count="$(echo "$extra_dirs" | tr ',' '\n' | wc -l)"
+    msg "  Mirrored $count directory declarations from parent theme"
+}
+
+# ──────────────────────────────────────────────
 # Install: Papirus mode
 # ──────────────────────────────────────────────
 
@@ -299,6 +369,10 @@ Type=Fixed
 
 SECTIONEOF
     done
+
+    # Mirror all non-places directories from parent theme for Qt compatibility
+    local parent_index="$source_dir/index.theme"
+    mirror_parent_dirs "$parent_index" "$theme_dir" "$theme_dir/index.theme"
 
     local size
     for size in "${PAPIRUS_SIZES[@]}"; do
@@ -382,6 +456,10 @@ Type=Fixed
 
 SECTIONEOF
     done
+
+    # Mirror all non-places directories from parent theme for Qt compatibility
+    local parent_index="$source_dir/index.theme"
+    mirror_parent_dirs "$parent_index" "$theme_dir" "$theme_dir/index.theme"
 
     local src_places="$source_dir/scalable/places"
     [ -d "$src_places" ] || fatal "Adwaita scalable/places not found"
