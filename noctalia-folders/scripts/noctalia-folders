@@ -260,14 +260,17 @@ load_state_dim() { grep '^dim=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 || echo
 # Reads a parent theme's index.theme and:
 #   1. Appends all non-places directory names to the Directories= line
 #   2. Writes [section] entries for each non-places directory
-#   3. Symlinks non-places directories to parent theme on disk
 #
-# Usage: mirror_parent_dirs <parent_index_theme> <parent_theme_dir> <noctalia_theme_dir> <noctalia_index_theme>
+# Directories are declared in index.theme but NOT created on disk:
+# - Empty dirs: Qt 6.10 treats as authoritative, won't fall through Inherits
+# - Absolute symlinks to /usr/share/icons: break inside flatpak sandboxes
+# - Nonexistent dirs: stat() returns ENOENT, toolkits fall through to Inherits
+#
+# Usage: mirror_parent_dirs <parent_index_theme> <noctalia_theme_dir> <noctalia_index_theme>
 mirror_parent_dirs() {
     local parent_index="$1"
-    local parent_dir="$2"
-    local theme_dir="$3"
-    local noctalia_index="$4"
+    local theme_dir="$2"
+    local noctalia_index="$3"
 
     [ -f "$parent_index" ] || { msg "Warning: parent index.theme not found at $parent_index, skipping mirror"; return 0; }
 
@@ -312,22 +315,6 @@ mirror_parent_dirs() {
 
     # Append section definitions
     printf '%s' "$sections" >> "$noctalia_index"
-
-    # Symlink non-places directories to parent theme
-    # (empty dirs don't work — Qt treats declared-but-empty as authoritative
-    #  and won't fall through to Inherits, breaking qadwaitadecorations etc.)
-    local dir
-    local IFS=','
-    for dir in $extra_dirs; do
-        local parent_path
-        parent_path="$(readlink -f "$parent_dir/$dir" 2>/dev/null)" || parent_path="$parent_dir/$dir"
-        if [ -d "$parent_path" ]; then
-            mkdir -p "$(dirname "$theme_dir/$dir")"
-            ln -sfn "$parent_path" "$theme_dir/$dir"
-        else
-            mkdir -p "$theme_dir/$dir"
-        fi
-    done
 
     local count
     count="$(echo "$extra_dirs" | tr ',' '\n' | wc -l)"
@@ -382,7 +369,7 @@ SECTIONEOF
 
     # Mirror all non-places directories from parent theme for Qt compatibility
     local parent_index="$source_dir/index.theme"
-    mirror_parent_dirs "$parent_index" "$source_dir" "$theme_dir" "$theme_dir/index.theme"
+    mirror_parent_dirs "$parent_index" "$theme_dir" "$theme_dir/index.theme"
 
     local size
     for size in "${PAPIRUS_SIZES[@]}"; do
@@ -469,7 +456,7 @@ SECTIONEOF
 
     # Mirror all non-places directories from parent theme for Qt compatibility
     local parent_index="$source_dir/index.theme"
-    mirror_parent_dirs "$parent_index" "$source_dir" "$theme_dir" "$theme_dir/index.theme"
+    mirror_parent_dirs "$parent_index" "$theme_dir" "$theme_dir/index.theme"
 
     local src_places="$source_dir/scalable/places"
     [ -d "$src_places" ] || fatal "Adwaita scalable/places not found"
